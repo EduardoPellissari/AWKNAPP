@@ -4,6 +4,8 @@ services:
     runtime: node
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
     envVars:
       - key: DATABASE_URL
         fromDatabase:
