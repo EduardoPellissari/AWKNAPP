@@ -2,6 +2,17 @@ const STORAGE_KEY = "ministerio-musica-dados-v2";
 const PROFILE_KEY = "ministerio-musica-perfil-v1";
 const API_STATE_URL = "/api/state";
 const ROLES = ["Voz", "Violão", "Guitarra", "Baixo", "Teclado", "Bateria"];
+const DEFAULT_MUSICIANS = [
+  { name: "Julian", mainRole: "Voz" },
+  { name: "Fabio", mainRole: "Voz" },
+  { name: "Eduardo", mainRole: "Baixo" },
+  { name: "Andreas", mainRole: "Baixo" },
+  { name: "Henrique", mainRole: "Guitarra" },
+  { name: "Guilherme", mainRole: "Guitarra" },
+  { name: "Tião", mainRole: "Bateria" },
+  { name: "Gabriel", mainRole: "Teclado" },
+];
+const OLD_DEMO_MUSICIANS = ["Ana Clara", "Rafael", "Mariana", "Pedro", "Lucas", "João"];
 const SETLIST_TYPES = {
   Missa: ["Entrada", "Ato penitencial", "Glória", "Salmo", "Aleluia", "Ofertório", "Santo", "Comunhão", "Final"],
   Grupos: ["Animação", "Louvor", "Pregação", "Oração", "Adoração", "Final"],
@@ -152,6 +163,7 @@ async function hydrateFromApi() {
     }
     const remote = normalizeState(data);
     Object.assign(state, remote);
+    migrateOldDemoMusicians();
     saveLocalState();
     render();
     maybeNotifyAssignment();
@@ -273,14 +285,7 @@ function normalizeState(data) {
 
 function seedIfEmpty() {
   if (!state.musicians.length) {
-    state.musicians = [
-      { id: crypto.randomUUID(), name: "Ana Clara", mainRole: "Voz" },
-      { id: crypto.randomUUID(), name: "Rafael", mainRole: "Violão" },
-      { id: crypto.randomUUID(), name: "Mariana", mainRole: "Teclado" },
-      { id: crypto.randomUUID(), name: "Pedro", mainRole: "Guitarra" },
-      { id: crypto.randomUUID(), name: "Lucas", mainRole: "Baixo" },
-      { id: crypto.randomUUID(), name: "João", mainRole: "Bateria" },
-    ];
+    state.musicians = DEFAULT_MUSICIANS.map((musician) => ({ id: crypto.randomUUID(), ...musician }));
   }
 
   if (!state.missions.length) {
@@ -313,7 +318,31 @@ function seedIfEmpty() {
 
   state.activeMissionId = state.activeMissionId || upcomingMission()?.id || state.missions[0]?.id || null;
   state.visibleDate = activeMission() ? dateFromInput(activeMission().date) : state.visibleDate;
+  migrateOldDemoMusicians();
   saveLocalState();
+}
+
+function migrateOldDemoMusicians() {
+  const names = state.musicians.map((musician) => musician.name);
+  const hasOldDemoNames = OLD_DEMO_MUSICIANS.every((name) => names.includes(name));
+  const hasRealNames = DEFAULT_MUSICIANS.some((musician) => names.includes(musician.name));
+  if (!hasOldDemoNames || hasRealNames) return;
+
+  state.musicians.slice(0, OLD_DEMO_MUSICIANS.length).forEach((musician, index) => {
+    musician.name = DEFAULT_MUSICIANS[index].name;
+    musician.mainRole = DEFAULT_MUSICIANS[index].mainRole;
+  });
+
+  DEFAULT_MUSICIANS.slice(OLD_DEMO_MUSICIANS.length).forEach((musician) => {
+    state.musicians.push({ id: crypto.randomUUID(), ...musician });
+  });
+
+  state.missions.forEach((mission) => {
+    mission.members.forEach((member) => {
+      const musician = musicianById(member.musicianId);
+      if (musician) member.role = musician.mainRole;
+    });
+  });
 }
 
 function setView(view) {
