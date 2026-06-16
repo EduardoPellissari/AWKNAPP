@@ -1,4 +1,4 @@
-const CACHE_NAME = "ministerio-musica-v6";
+const CACHE_NAME = "ministerio-musica-v7";
 const ASSETS = [
   "./",
   "./index.html",

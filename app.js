@@ -115,8 +115,8 @@ function wireEvents() {
 
 function login(event) {
   event.preventDefault();
-  const email = els.loginEmail.value.trim().toLowerCase();
-  const password = els.loginPassword.value;
+  const email = normalizeLoginInput(els.loginEmail.value);
+  const password = els.loginPassword.value.trim();
   const musician = state.musicians.find((item) => loginForMusician(item) === email);
 
   if (!musician || password !== "2026") {
@@ -841,6 +841,12 @@ function nativeNotifications() {
 
 function loginForMusician(musician) {
   return `${slugify(musician.name)}@awkn`;
+}
+
+function normalizeLoginInput(value) {
+  const cleaned = String(value).trim().toLowerCase();
+  const [name, domain = "awkn"] = cleaned.split("@");
+  return `${slugify(name)}@${slugify(domain) || "awkn"}`;
 }
 
 function slugify(value) {
