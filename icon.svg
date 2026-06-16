@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Ícone do ministério de música">
+  <rect width="120" height="120" rx="26" fill="#123d3a"/>
+  <circle cx="42" cy="38" r="15" fill="#f5f2e9"/>
+  <path d="M63 23v56a15 15 0 1 1-9-13V33l39-8v44a15 15 0 1 1-9-13V35z" fill="#c77f35"/>
+  <path d="M24 82c15 12 36 16 59 4" fill="none" stroke="#f5f2e9" stroke-width="7" stroke-linecap="round"/>
+</svg>

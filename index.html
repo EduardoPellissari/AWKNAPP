@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101010" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="awkn!" />
+    <meta name="description" content="Organizador de missões, escalas e setlists para ministério de música." />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="apple-touch-icon" href="./icon-180.png" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>Ministério de Música</title>
+  </head>
+  <body>
+    <section id="loginScreen" class="login-screen">
+      <form id="loginForm" class="login-card">
+        <img src="./logo-awkn.png" alt="awkn!" />
+        <div>
+          <p class="eyebrow">Acesso do ministério</p>
+          <h1>Entrar no app</h1>
+        </div>
+        <label>
+          Login
+          <input id="loginEmail" autocomplete="username" required placeholder="nome@awkn" />
+        </label>
+        <label>
+          Senha
+          <input id="loginPassword" autocomplete="current-password" required type="password" placeholder="2026" />
+        </label>
+        <p id="loginError" class="form-error" role="alert"></p>
+        <button class="primary-button" type="submit">Entrar</button>
+      </form>
+    </section>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <img src="./logo-awkn.png" alt="awkn!" />
+          <div>
+            <strong>awkn!</strong>
+            <span>Música em missão</span>
+          </div>
+        </div>
+
+        <nav class="nav-tabs" aria-label="Seções do aplicativo">
+          <button class="tab-button active" data-view="agenda" type="button" title="Agenda">
+            <span>Agenda</span>
+          </button>
+          <button class="tab-button" data-view="missao" type="button" title="Missão">
+            <span>Missão</span>
+          </button>
+          <button class="tab-button" data-view="escala" type="button" title="Escala">
+            <span>Escala</span>
+          </button>
+          <button class="tab-button" data-view="musicos" type="button" title="Músicos">
+            <span>Músicos</span>
+          </button>
+          <button class="tab-button" data-view="setlist" type="button" title="Setlist">
+            <span>Setlist</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <span id="missionCount">0 missões</span>
+          <button id="exportButton" class="ghost-button" type="button">Exportar</button>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Planejamento pastoral</p>
+            <h1>Agenda do ministério</h1>
+          </div>
+          <div class="top-actions">
+            <div class="user-chip">
+              <span id="currentUserName">Sem login</span>
+              <button id="logoutButton" class="ghost-button" type="button">Sair</button>
+            </div>
+            <button id="installButton" class="ghost-button" type="button">Baixar app</button>
+            <button id="notifyButton" class="ghost-button" type="button">Notificações</button>
+            <button id="newMissionButton" class="primary-button" type="button">Nova missão</button>
+          </div>
+        </header>
+
+        <section class="view active" id="agendaView" aria-label="Agenda">
+          <section class="cover-panel" aria-label="Capa do aplicativo">
+            <img src="./logo-awkn.png" alt="awkn!" />
+            <div>
+              <p class="eyebrow">Ministério de música</p>
+              <h2>Missões, escalas e repertórios em um só lugar</h2>
+            </div>
+          </section>
+
+          <div class="agenda-grid">
+            <section class="panel calendar-panel">
+              <div class="panel-header">
+                <button id="prevMonth" class="icon-button" type="button" title="Mês anterior">‹</button>
+                <h2 id="monthTitle">Mês</h2>
+                <button id="nextMonth" class="icon-button" type="button" title="Próximo mês">›</button>
+              </div>
+              <div class="weekdays" aria-hidden="true">
+                <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+              </div>
+              <div id="calendarGrid" class="calendar-grid"></div>
+            </section>
+
+            <section class="panel selected-panel">
+              <div class="panel-header stacked">
+                <p class="eyebrow">Missão selecionada</p>
+                <h2 id="selectedTitle">Selecione uma data</h2>
+              </div>
+              <div id="selectedDetails" class="selected-details"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="missaoView" aria-label="Cadastro da missão">
+          <form id="missionForm" class="form-grid panel">
+            <input type="hidden" id="missionId" />
+            <label>
+              Nome da missão
+              <input id="missionTitle" required placeholder="Ex: Missa do grupo de oração" />
+            </label>
+            <label>
+              Data
+              <input id="missionDate" type="date" required />
+            </label>
+            <label>
+              Horário
+              <input id="missionTime" type="time" required />
+            </label>
+            <label>
+              Local
+              <input id="missionPlace" placeholder="Ex: Paróquia São José" />
+            </label>
+            <label class="span-2">
+              Observações
+              <textarea id="missionNotes" rows="4" placeholder="Ex: chegar 40 minutos antes, levar cifras impressas"></textarea>
+            </label>
+            <div class="form-actions span-2">
+              <button id="deleteMissionButton" class="danger-button hidden" type="button">Excluir</button>
+              <button class="primary-button" type="submit">Salvar missão</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="view" id="escalaView" aria-label="Escala da missão">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Equipe da missão</p>
+                <h2 id="scaleTitle">Escolha uma missão</h2>
+              </div>
+            </div>
+            <form id="memberForm" class="inline-form">
+              <select id="memberMusician" required></select>
+              <button class="secondary-button" type="submit">Escalar</button>
+            </form>
+            <div id="memberList" class="item-list"></div>
+            <div class="scale-song-panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Músicas da missa</p>
+                  <h2>Selecionar do setlist</h2>
+                </div>
+              </div>
+              <div class="scale-song-picker">
+                <select id="scaleMomentSelect"></select>
+                <select id="scaleSongSelect"></select>
+                <button id="scaleAddSongButton" class="ghost-button" type="button">Usar música</button>
+              </div>
+              <div id="scaleSongList" class="item-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="musicosView" aria-label="Lista de músicos">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Cadastro fixo</p>
+                <h2>Músicos do ministério</h2>
+              </div>
+            </div>
+            <form id="musicianForm" class="inline-form">
+              <input id="musicianName" placeholder="Nome do músico" required />
+              <select id="musicianMainRole" required>
+                <option value="Voz">Voz</option>
+                <option value="Violão">Violão</option>
+                <option value="Guitarra">Guitarra</option>
+                <option value="Baixo">Baixo</option>
+                <option value="Teclado">Teclado</option>
+                <option value="Bateria">Bateria</option>
+              </select>
+              <button class="secondary-button" type="submit">Cadastrar</button>
+            </form>
+            <div id="musicianList" class="item-list"></div>
+          </div>
+        </section>
+
+        <section class="view" id="setlistView" aria-label="Setlist da missão">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Repertório</p>
+                <h2 id="setlistTitle">Escolha uma missão</h2>
+              </div>
+            </div>
+            <div id="setlistTypeTabs" class="setlist-type-tabs"></div>
+            <div id="momentTabs" class="moment-tabs"></div>
+            <div id="libraryPicker" class="library-picker">
+              <select id="librarySongSelect"></select>
+              <button id="useLibrarySongButton" class="ghost-button" type="button">Usar música</button>
+            </div>
+            <form id="songForm" class="inline-form song-form">
+              <input id="songName" placeholder="Nome da música" required />
+              <select id="songKey" required></select>
+              <button class="secondary-button" type="submit">Adicionar</button>
+            </form>
+            <div id="songList" class="item-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="emptyStateTemplate">
+      <div class="empty-state">
+        <strong>Nenhuma missão selecionada</strong>
+        <span>Crie uma missão ou toque em uma data marcada no calendário.</span>
+      </div>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
