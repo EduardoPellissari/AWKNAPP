@@ -126,7 +126,7 @@ app.post("/api/push/test", async (request, response) => {
 
 app.get("/api/state", async (_request, response) => {
   try {
-    if (!pool) return response.json({});
+    if (!pool) return response.status(503).json({ error: "Banco de dados indisponivel. Abra o app publicado no Render com DATABASE_URL configurada." });
     await ensureSchema();
     const result = await pool.query("SELECT value FROM app_state WHERE key = $1", ["main"]);
     response.json(result.rows[0]?.value || {});
@@ -138,7 +138,7 @@ app.get("/api/state", async (_request, response) => {
 
 app.put("/api/state", async (request, response) => {
   try {
-    if (!pool) return response.json({ ok: true, mode: "local" });
+    if (!pool) return response.status(503).json({ error: "Banco de dados indisponivel. Esta alteracao nao foi compartilhada." });
     await ensureSchema();
     const previous = await pool.query("SELECT value FROM app_state WHERE key = $1", ["main"]);
     const previousState = previous.rows[0]?.value || {};

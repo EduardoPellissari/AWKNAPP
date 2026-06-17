@@ -68,6 +68,8 @@ Depois de publicado, abra a URL do Render no celular:
 
 Tambem existe um botao **Baixar app** dentro do aplicativo.
 
+Para os dados ficarem iguais no computador e no celular, abra sempre a mesma URL publicada no Render. Se abrir `localhost`, arquivo local ou uma previa antiga, aquele aparelho fica em modo local e nao compartilha missoes com os outros.
+
 ### Notificacoes automaticas
 
 Para receber notificacoes quando for escalado:

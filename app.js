@@ -52,6 +52,10 @@ let activeMoment = SETLIST_TYPES[activeSetlistType][0];
 let saveTimer = null;
 let deferredInstallPrompt = null;
 let isHydrating = false;
+let syncStatus = {
+  state: "checking",
+  message: "Sincronizando",
+};
 
 const els = {
   loginScreen: document.querySelector("#loginScreen"),
@@ -67,6 +71,7 @@ const els = {
   currentUserName: document.querySelector("#currentUserName"),
   topEyebrow: document.querySelector("#topEyebrow"),
   topTitle: document.querySelector("#topTitle"),
+  syncStatus: document.querySelector("#syncStatus"),
   installButton: document.querySelector("#installButton"),
   missionCount: document.querySelector("#missionCount"),
   exportButton: document.querySelector("#exportButton"),
@@ -134,6 +139,7 @@ function wireEvents() {
   els.savedLoginSelect.addEventListener("change", useSavedLogin);
   els.logoutButton.addEventListener("click", logout);
   els.installButton.addEventListener("click", installApp);
+  els.syncStatus.addEventListener("click", () => alert(syncStatus.message || els.syncStatus.textContent));
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     deferredInstallPrompt = event;
@@ -197,10 +203,14 @@ function startAutoSync() {
 async function hydrateFromApi({ silent = false } = {}) {
   if (isHydrating) return;
   isHydrating = true;
+  setSyncStatus("checking", "Sincronizando");
   try {
     const response = await fetch(API_STATE_URL, { cache: "no-store", headers: { accept: "application/json" } });
-    if (!response.ok) return;
-    const data = await response.json();
+    const data = await readJsonResponse(response);
+    if (!response.ok) {
+      setSyncStatus("offline", data?.error || "Sem conexão com o banco");
+      return;
+    }
     const hasRemoteData = Array.isArray(data.musicians) && data.musicians.length > 0;
     if (!hasRemoteData) {
       await saveRemoteState();
@@ -211,9 +221,11 @@ async function hydrateFromApi({ silent = false } = {}) {
     reconcileFixedMusicians();
     saveLocalState();
     render();
+    setSyncStatus("online", "Sincronizado");
     checkInAppNotifications();
     if (!silent) maybeNotifyAssignment();
-  } catch {
+  } catch (error) {
+    setSyncStatus("offline", `Sem sincronizar: ${errorMessage(error)}`);
     // Local file use keeps working without the hosted API.
   } finally {
     isHydrating = false;
@@ -238,24 +250,45 @@ function scheduleSave() {
 }
 
 async function saveRemoteState() {
+  setSyncStatus("checking", "Salvando");
   try {
     const response = await fetch(API_STATE_URL, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(toPersistedState()),
     });
+    const data = await readJsonResponse(response);
+    if (!response.ok) {
+      setSyncStatus("offline", data?.error || "Não consegui salvar no banco");
+      return false;
+    }
+    if (data?.mode === "local") {
+      setSyncStatus("local", "Modo local, sem banco compartilhado");
+      return false;
+    }
     if (response.ok) {
-      const data = await response.json().catch(() => null);
       if (data?.state) {
         Object.assign(state, normalizeState(data.state));
         reconcileFixedMusicians();
         saveLocalState();
       }
+      setSyncStatus("online", "Sincronizado");
     }
     return response.ok;
-  } catch {
+  } catch (error) {
+    setSyncStatus("offline", `Não sincronizado: ${errorMessage(error)}`);
     // The local copy is already saved; sync resumes when the hosted API is reachable.
     return false;
+  }
+}
+
+async function readJsonResponse(response) {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: shortText(text) };
   }
 }
 
@@ -491,6 +524,7 @@ function setView(view) {
 
 function render() {
   renderLoginState();
+  renderSyncStatus();
   renderSelectors();
   renderCalendar();
   renderSelectedMission();
@@ -499,6 +533,24 @@ function render() {
   renderMusicians();
   renderSetlist();
   els.missionCount.textContent = `${state.missions.length} ${state.missions.length === 1 ? "missão" : "missões"}`;
+}
+
+function setSyncStatus(stateName, message) {
+  syncStatus = { state: stateName, message };
+  renderSyncStatus();
+}
+
+function renderSyncStatus() {
+  if (!els.syncStatus) return;
+  const labels = {
+    checking: "Sincronizando",
+    online: "Sincronizado",
+    offline: "Sem sincronizar",
+    local: "Modo local",
+  };
+  els.syncStatus.textContent = labels[syncStatus.state] || "Sincronizando";
+  els.syncStatus.className = `sync-status ${syncStatus.state || "checking"}`;
+  els.syncStatus.title = syncStatus.message || els.syncStatus.textContent;
 }
 
 function renderLoginState() {

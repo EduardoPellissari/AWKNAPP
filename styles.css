@@ -251,8 +251,44 @@ main {
 }
 
 .top-actions > button,
-.user-chip {
+.user-chip,
+.sync-status {
   flex: 0 0 auto;
+}
+
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.sync-status::before {
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  content: "";
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 14px rgba(255, 176, 0, 0.5);
+}
+
+.sync-status.online::before {
+  background: var(--green);
+  box-shadow: 0 0 14px rgba(41, 229, 143, 0.5);
+}
+
+.sync-status.offline::before,
+.sync-status.local::before {
+  background: var(--danger);
+  box-shadow: 0 0 14px rgba(255, 90, 104, 0.5);
 }
 
 .compact-label {
@@ -813,6 +849,12 @@ textarea:focus {
     min-height: 46px;
     padding-left: 12px;
     background: rgba(255, 255, 255, 0.075);
+  }
+
+  .sync-status {
+    grid-column: 1 / -1;
+    justify-content: center;
+    min-height: 32px;
   }
 
   .top-actions .primary-button {
