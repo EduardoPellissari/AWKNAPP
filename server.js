@@ -83,7 +83,10 @@ app.post("/api/push/subscribe", async (request, response) => {
     response.json({ ok: true });
   } catch (error) {
     console.error(error);
-    response.status(500).json({ error: "Nao foi possivel ativar notificacoes." });
+    response.status(500).json({
+      error: "Nao foi possivel ativar notificacoes.",
+      detail: databaseErrorDetail(error),
+    });
   }
 });
 
@@ -189,12 +192,20 @@ async function ensureSchema() {
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       id SERIAL PRIMARY KEY,
       musician_id TEXT NOT NULL,
-      endpoint TEXT UNIQUE NOT NULL,
-      subscription JSONB NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      endpoint TEXT NOT NULL,
+      subscription JSONB NOT NULL
     )
   `);
+
+  await pool.query("ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()");
+  await pool.query("ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()");
+  await pool.query(`
+    DELETE FROM push_subscriptions older
+    USING push_subscriptions newer
+    WHERE older.id < newer.id
+      AND older.endpoint = newer.endpoint
+  `);
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_endpoint_key ON push_subscriptions (endpoint)");
 }
 
 function mergeAppState(previousState = {}, incomingState = {}) {
@@ -355,4 +366,8 @@ function formatPushDate(value) {
   if (!value) return "data definida";
   const [year, month, day] = value.split("-").map(Number);
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(new Date(year, month - 1, day));
+}
+
+function databaseErrorDetail(error) {
+  return [error?.code, error?.message].filter(Boolean).join(": ").slice(0, 240) || "Erro interno sem detalhe.";
 }

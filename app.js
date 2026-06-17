@@ -1095,7 +1095,8 @@ async function syncPushSubscription({ refresh = false } = {}) {
       responseData = {};
     }
     if (!response.ok) {
-      return pushSetupFailure("cadastro no servidor", `Resposta ${response.status}: ${responseData.error || shortText(responseText)}`);
+      const serverMessage = [responseData.error, responseData.detail].filter(Boolean).join(" ");
+      return pushSetupFailure("cadastro no servidor", `Resposta ${response.status}: ${serverMessage || shortText(responseText)}`);
     }
 
     return { ok: true, endpoint: subscription.endpoint };
