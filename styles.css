@@ -744,11 +744,20 @@ textarea:focus {
   }
 
   .nav-tabs {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    display: flex;
     gap: 7px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 0 2px 2px;
+    scrollbar-width: none;
+  }
+
+  .nav-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .tab-button {
+    flex: 0 0 76px;
     display: grid;
     place-items: center;
     min-height: 56px;
@@ -1026,6 +1035,7 @@ textarea:focus {
   }
 
   .tab-button {
+    flex-basis: 72px;
     font-size: 0.7rem;
   }
 

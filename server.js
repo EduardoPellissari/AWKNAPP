@@ -26,6 +26,11 @@ webpush.setVapidDetails("mailto:awkn@app.local", vapidPublicKey, vapidPrivateKey
 
 app.use(express.json({ limit: "2mb" }));
 
+app.use("/api", (_request, response, next) => {
+  response.setHeader("Cache-Control", "no-store");
+  next();
+});
+
 app.get("/api/health", (_request, response) => {
   response.json({ ok: true, database: Boolean(pool), push: Boolean(vapidPublicKey && vapidPrivateKey) });
 });
@@ -71,6 +76,24 @@ app.post("/api/push/unsubscribe", async (request, response) => {
   }
 });
 
+app.post("/api/push/test", async (request, response) => {
+  try {
+    if (!pool) return response.status(503).json({ error: "Banco de dados indisponivel." });
+    const { musicianId } = request.body || {};
+    if (!musicianId) return response.status(400).json({ error: "Musico invalido." });
+    await ensureSchema();
+    const sent = await sendPushToMusician(musicianId, {
+      title: "Notificações ativadas",
+      body: "Este aparelho já pode receber avisos de escala.",
+      url: "/",
+    });
+    response.json({ ok: true, sent });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Nao foi possivel testar notificacao." });
+  }
+});
+
 app.get("/api/state", async (_request, response) => {
   try {
     if (!pool) return response.json({});
@@ -89,15 +112,16 @@ app.put("/api/state", async (request, response) => {
     await ensureSchema();
     const previous = await pool.query("SELECT value FROM app_state WHERE key = $1", ["main"]);
     const previousState = previous.rows[0]?.value || {};
+    const nextState = mergeAppState(previousState, request.body || {});
     await pool.query(
       `INSERT INTO app_state (key, value, updated_at)
        VALUES ($1, $2, NOW())
        ON CONFLICT (key)
        DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
-      ["main", request.body]
+      ["main", nextState]
     );
-    response.json({ ok: true });
-    notifyNewAssignments(previousState, request.body).catch((error) => console.error(error));
+    response.json({ ok: true, state: nextState });
+    notifyNewAssignments(previousState, nextState).catch((error) => console.error(error));
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Nao foi possivel salvar os dados." });
@@ -144,6 +168,75 @@ async function ensureSchema() {
   `);
 }
 
+function mergeAppState(previousState = {}, incomingState = {}) {
+  const deletedMissionIds = [...new Set([...(previousState.deletedMissionIds || []), ...(incomingState.deletedMissionIds || [])])];
+  const missions = mergeMissions(previousState.missions, incomingState.missions).filter((mission) => !deletedMissionIds.includes(mission.id));
+  const activeMissionId = incomingState.activeMissionId || previousState.activeMissionId || null;
+  return {
+    musicians: mergeById(previousState.musicians, incomingState.musicians, "mainRole"),
+    missions,
+    songLibrary: mergeSongs(previousState.songLibrary, incomingState.songLibrary),
+    deletedMissionIds,
+    activeMissionId: missions.some((mission) => mission.id === activeMissionId) ? activeMissionId : missions[0]?.id || null,
+    visibleDate: incomingState.visibleDate || previousState.visibleDate,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function mergeById(previous = [], incoming = [], tieField) {
+  const map = new Map();
+  [...(previous || []), ...(incoming || [])].forEach((item) => {
+    if (!item?.id) return;
+    const current = map.get(item.id) || {};
+    map.set(item.id, { ...current, ...item, [tieField]: item[tieField] || current[tieField] });
+  });
+  return [...map.values()];
+}
+
+function mergeMissions(previous = [], incoming = []) {
+  const map = new Map();
+  (previous || []).forEach((mission) => {
+    if (mission?.id) map.set(mission.id, { ...mission });
+  });
+  (incoming || []).forEach((mission) => {
+    if (!mission?.id) return;
+    const current = map.get(mission.id) || {};
+    const currentTime = Date.parse(current.updatedAt || 0) || 0;
+    const incomingTime = Date.parse(mission.updatedAt || 0) || 0;
+    if (!current.id || incomingTime >= currentTime) {
+      map.set(mission.id, {
+        ...current,
+        ...mission,
+        members: Array.isArray(mission.members) ? mission.members : current.members || [],
+        songs: Array.isArray(mission.songs) ? mission.songs : current.songs || [],
+        updatedAt: mission.updatedAt || new Date().toISOString(),
+      });
+    }
+  });
+  return [...map.values()].sort((a, b) => `${a.date || ""} ${a.time || ""}`.localeCompare(`${b.date || ""} ${b.time || ""}`));
+}
+
+function mergeMembers(previous = [], incoming = []) {
+  const map = new Map();
+  [...(previous || []), ...(incoming || [])].forEach((member) => {
+    if (!member?.id) return;
+    const current = map.get(member.id) || {};
+    map.set(member.id, { ...current, ...member });
+  });
+  return [...map.values()];
+}
+
+function mergeSongs(previous = [], incoming = []) {
+  const map = new Map();
+  [...(previous || []), ...(incoming || [])].forEach((song) => {
+    const key = song?.id || `${song?.type || "Missa"}:${song?.moment || ""}:${String(song?.name || "").toLowerCase()}`;
+    if (!key) return;
+    const current = map.get(key) || {};
+    map.set(key, { ...current, ...song, id: song?.id || current.id || key });
+  });
+  return [...map.values()];
+}
+
 async function notifyNewAssignments(previousState, nextState) {
   if (!pool) return;
   const previousKeys = assignmentKeys(previousState);
@@ -180,10 +273,12 @@ function assignmentKey(mission, member) {
 
 async function sendPushToMusician(musicianId, payload) {
   const result = await pool.query("SELECT id, subscription FROM push_subscriptions WHERE musician_id = $1", [musicianId]);
+  let sent = 0;
   await Promise.all(
     result.rows.map(async (row) => {
       try {
         await webpush.sendNotification(row.subscription, JSON.stringify(payload));
+        sent += 1;
       } catch (error) {
         if (error.statusCode === 404 || error.statusCode === 410) {
           await pool.query("DELETE FROM push_subscriptions WHERE id = $1", [row.id]);
@@ -193,6 +288,7 @@ async function sendPushToMusician(musicianId, payload) {
       }
     })
   );
+  return sent;
 }
 
 function formatPushDate(value) {

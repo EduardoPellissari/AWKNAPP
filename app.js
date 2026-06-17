@@ -4,6 +4,7 @@ const SAVED_LOGINS_KEY = "ministerio-musica-logins-v1";
 const API_STATE_URL = "/api/state";
 const PUSH_PUBLIC_KEY_URL = "/api/push/public-key";
 const PUSH_SUBSCRIBE_URL = "/api/push/subscribe";
+const PUSH_TEST_URL = "/api/push/test";
 const SYNC_INTERVAL_MS = 10000;
 const ROLES = ["Voz", "Violão", "Guitarra", "Baixo", "Teclado", "Bateria"];
 const DEFAULT_MUSICIANS = [
@@ -194,7 +195,7 @@ async function hydrateFromApi({ silent = false } = {}) {
   if (isHydrating) return;
   isHydrating = true;
   try {
-    const response = await fetch(API_STATE_URL, { headers: { accept: "application/json" } });
+    const response = await fetch(API_STATE_URL, { cache: "no-store", headers: { accept: "application/json" } });
     if (!response.ok) return;
     const data = await response.json();
     const hasRemoteData = Array.isArray(data.musicians) && data.musicians.length > 0;
@@ -239,6 +240,14 @@ async function saveRemoteState() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(toPersistedState()),
     });
+    if (response.ok) {
+      const data = await response.json().catch(() => null);
+      if (data?.state) {
+        Object.assign(state, normalizeState(data.state));
+        reconcileFixedMusicians();
+        saveLocalState();
+      }
+    }
     return response.ok;
   } catch {
     // The local copy is already saved; sync resumes when the hosted API is reachable.
@@ -250,7 +259,7 @@ async function saveNow() {
   clearTimeout(saveTimer);
   saveLocalState();
   const saved = await saveRemoteState();
-  if (saved) hydrateFromApi({ silent: true });
+  if (saved) render();
   return saved;
 }
 
@@ -305,6 +314,7 @@ function toPersistedState() {
     musicians: state.musicians,
     missions: state.missions,
     songLibrary: state.songLibrary,
+    deletedMissionIds: state.deletedMissionIds || [],
     activeMissionId: state.activeMissionId,
     visibleDate: inputFromDate(state.visibleDate),
     updatedAt: new Date().toISOString(),
@@ -315,9 +325,10 @@ function normalizeState(data) {
   const missions = Array.isArray(data.missions) ? data.missions : [];
   const musicians = Array.isArray(data.musicians) ? data.musicians : [];
   const songLibrary = Array.isArray(data.songLibrary) ? data.songLibrary : [];
+  const deletedMissionIds = Array.isArray(data.deletedMissionIds) ? data.deletedMissionIds : [];
   return {
     musicians: musicians.map((musician) => ({
-      id: musician.id || crypto.randomUUID(),
+      id: musician.id || musicianIdForName(musician.name),
       name: musician.name || "",
       mainRole: ROLES.includes(musician.mainRole) ? musician.mainRole : "Voz",
     })),
@@ -328,6 +339,7 @@ function normalizeState(data) {
       time: mission.time || "19:30",
       place: mission.place || "",
       notes: mission.notes || "",
+      updatedAt: mission.updatedAt || new Date().toISOString(),
       members: Array.isArray(mission.members)
         ? mission.members.map((member) => ({
             id: member.id || crypto.randomUUID(),
@@ -354,6 +366,7 @@ function normalizeState(data) {
       type: SETLIST_TYPES[song.type] ? song.type : "Missa",
       moment: MOMENTS.includes(song.moment) ? song.moment : "Entrada",
     })),
+    deletedMissionIds,
     activeMissionId: data.activeMissionId || null,
     visibleDate: data.visibleDate ? dateFromInput(data.visibleDate) : new Date(),
   };
@@ -361,7 +374,7 @@ function normalizeState(data) {
 
 function seedIfEmpty() {
   if (!state.musicians.length) {
-    state.musicians = DEFAULT_MUSICIANS.map((musician) => ({ id: crypto.randomUUID(), ...musician }));
+    state.musicians = DEFAULT_MUSICIANS.map((musician) => ({ id: musicianIdForName(musician.name), ...musician }));
   }
 
   if (!state.missions.length) {
@@ -373,6 +386,7 @@ function seedIfEmpty() {
         time: "19:30",
         place: "Paróquia São José",
         notes: "Chegar 40 minutos antes para passagem de som.",
+        updatedAt: new Date().toISOString(),
         members: state.musicians.slice(0, 4).map((musician) => ({
           id: crypto.randomUUID(),
           musicianId: musician.id,
@@ -414,7 +428,7 @@ function reconcileFixedMusicians() {
   const fixedMusicians = DEFAULT_MUSICIANS.map((defaultMusician) => {
     const slug = slugify(defaultMusician.name);
     const existing = bySlug.get(slug);
-    const id = existing?.id || crypto.randomUUID();
+    const id = musicianIdForName(defaultMusician.name);
     if (existing?.id && existing.id !== id) oldIdToNewId.set(existing.id, id);
     return { id, ...defaultMusician };
   });
@@ -440,6 +454,14 @@ function reconcileFixedMusicians() {
     profile.musicianId = oldIdToNewId.get(profile.musicianId);
     saveProfile();
   }
+
+  if (profile.login && !musicianById(profile.musicianId)) {
+    const musician = findMusicianForLogin(profile.login);
+    if (musician) {
+      profile.musicianId = musician.id;
+      saveProfile();
+    }
+  }
 }
 
 function setView(view) {
@@ -448,6 +470,7 @@ function setView(view) {
   const [eyebrow, title] = VIEW_TITLES[view] || VIEW_TITLES.agenda;
   els.topEyebrow.textContent = eyebrow;
   els.topTitle.textContent = title;
+  document.querySelector(`.tab-button[data-view="${view}"]`)?.scrollIntoView({ inline: "center", block: "nearest" });
 }
 
 function render() {
@@ -690,6 +713,7 @@ function saveMissionFromForm(event) {
     time: els.missionTime.value,
     place: els.missionPlace.value.trim(),
     notes: els.missionNotes.value.trim(),
+    updatedAt: new Date().toISOString(),
     members: existing?.members || [],
     songs: existing?.songs || [],
   };
@@ -700,7 +724,7 @@ function saveMissionFromForm(event) {
   state.missions.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
   state.activeMissionId = id;
   state.visibleDate = dateFromInput(mission.date);
-  scheduleSave();
+  saveNow();
   render();
   setView("escala");
 }
@@ -709,8 +733,9 @@ function deleteActiveMission() {
   const mission = activeMission();
   if (!mission || !confirm(`Excluir "${mission.title}"?`)) return;
   state.missions = state.missions.filter((item) => item.id !== mission.id);
+  state.deletedMissionIds = [...new Set([...(state.deletedMissionIds || []), mission.id])];
   state.activeMissionId = upcomingMission()?.id || state.missions[0]?.id || null;
-  scheduleSave();
+  saveNow();
   render();
   setView("agenda");
 }
@@ -735,6 +760,7 @@ function addAssignment(event) {
       assignedAt: new Date().toISOString(),
     });
   }
+  touchMission(mission);
   els.memberForm.reset();
   saveNow();
   render();
@@ -743,9 +769,10 @@ function addAssignment(event) {
 
 function addMusician(event) {
   event.preventDefault();
+  const name = els.musicianName.value.trim();
   state.musicians.push({
-    id: crypto.randomUUID(),
-    name: els.musicianName.value.trim(),
+    id: musicianIdForName(name),
+    name,
     mainRole: els.musicianMainRole.value,
   });
   els.musicianForm.reset();
@@ -765,6 +792,7 @@ function addSong(event) {
     moment: activeMoment,
   };
   mission.songs.push(song);
+  touchMission(mission);
   addToLibrary(song);
   els.songForm.reset();
   els.songKey.value = "C";
@@ -784,6 +812,7 @@ function addSongFromLibrary() {
     type: activeSetlistType,
     moment: activeMoment,
   });
+  touchMission(mission);
   scheduleSave();
   renderSetlist();
 }
@@ -800,6 +829,7 @@ function addScaleSongFromLibrary() {
     type: "Missa",
     moment: els.scaleMomentSelect.value || librarySong.moment || "Entrada",
   });
+  touchMission(mission);
   scheduleSave();
   renderScaleSongPicker();
   renderSelectedMission();
@@ -826,6 +856,7 @@ function assignmentCard(mission, member) {
   confirm.addEventListener("click", () => {
     if (!canConfirm) return;
     member.confirmed = !member.confirmed;
+    touchMission(mission);
     scheduleSave();
     render();
   });
@@ -854,6 +885,7 @@ function removeButton(onRemove) {
 function removeAssignment(missionId, memberId) {
   const mission = state.missions.find((item) => item.id === missionId);
   mission.members = mission.members.filter((member) => member.id !== memberId);
+  touchMission(mission);
   scheduleSave();
   render();
 }
@@ -875,10 +907,15 @@ function removeMusician(id) {
 function removeSong(id) {
   const mission = activeMission();
   mission.songs = mission.songs.filter((song) => song.id !== id);
+  touchMission(mission);
   scheduleSave();
   renderScaleSongPicker();
   renderSelectedMission();
   renderSetlist();
+}
+
+function touchMission(mission) {
+  if (mission) mission.updatedAt = new Date().toISOString();
 }
 
 function addToLibrary(song) {
@@ -946,7 +983,10 @@ function enableNotifications() {
       return;
     }
     const ok = await syncPushSubscription();
-    if (ok) alert("Notificações automáticas ativadas neste aparelho.");
+    if (ok) {
+      const tested = await sendTestPush();
+      alert(tested ? "Notificações automáticas ativadas. Um teste foi enviado para este aparelho." : "Notificações ativadas, mas o teste não foi confirmado pelo servidor.");
+    }
     maybeNotifyAssignment(true);
   });
 }
@@ -956,7 +996,7 @@ async function syncPushSubscription() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
   try {
     const registration = await navigator.serviceWorker.ready;
-    const publicKeyResponse = await fetch(PUSH_PUBLIC_KEY_URL);
+    const publicKeyResponse = await fetch(PUSH_PUBLIC_KEY_URL, { cache: "no-store" });
     if (!publicKeyResponse.ok) return false;
     const { publicKey } = await publicKeyResponse.json();
     const subscription =
@@ -971,6 +1011,21 @@ async function syncPushSubscription() {
       body: JSON.stringify({ musicianId: profile.musicianId, subscription }),
     });
     return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function sendTestPush() {
+  try {
+    const response = await fetch(PUSH_TEST_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ musicianId: profile.musicianId }),
+    });
+    if (!response.ok) return false;
+    const data = await response.json();
+    return Boolean(data.sent);
   } catch {
     return false;
   }
@@ -1049,6 +1104,10 @@ function urlBase64ToUint8Array(value) {
 
 function loginForMusician(musician) {
   return `${slugify(musician.name)}@awkn`;
+}
+
+function musicianIdForName(name) {
+  return `musician-${slugify(name)}`;
 }
 
 function findMusicianForLogin(value) {
