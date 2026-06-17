@@ -13,6 +13,14 @@ const DEFAULT_MUSICIANS = [
   { name: "Gabriel", mainRole: "Teclado" },
 ];
 const OLD_DEMO_MUSICIANS = ["Ana Clara", "Rafael", "Mariana", "Pedro", "Lucas", "João"];
+const LEGACY_MUSICIAN_ALIASES = {
+  anaclara: "julian",
+  rafael: "fabio",
+  mariana: "eduardo",
+  pedro: "andreas",
+  lucas: "henrique",
+  joao: "guilherme",
+};
 const SETLIST_TYPES = {
   Missa: ["Entrada", "Ato penitencial", "Glória", "Salmo", "Aleluia", "Ofertório", "Santo", "Comunhão", "Final"],
   Grupos: ["Animação", "Louvor", "Pregação", "Oração", "Adoração", "Final"],
@@ -163,8 +171,9 @@ async function hydrateFromApi() {
     }
     const remote = normalizeState(data);
     Object.assign(state, remote);
-    migrateOldDemoMusicians();
+    reconcileFixedMusicians();
     saveLocalState();
+    await saveRemoteState();
     render();
     maybeNotifyAssignment();
   } catch {
@@ -318,31 +327,51 @@ function seedIfEmpty() {
 
   state.activeMissionId = state.activeMissionId || upcomingMission()?.id || state.missions[0]?.id || null;
   state.visibleDate = activeMission() ? dateFromInput(activeMission().date) : state.visibleDate;
-  migrateOldDemoMusicians();
+  reconcileFixedMusicians();
   saveLocalState();
 }
 
-function migrateOldDemoMusicians() {
-  const names = state.musicians.map((musician) => musician.name);
-  const hasOldDemoNames = OLD_DEMO_MUSICIANS.every((name) => names.includes(name));
-  const hasRealNames = DEFAULT_MUSICIANS.some((musician) => names.includes(musician.name));
-  if (!hasOldDemoNames || hasRealNames) return;
+function reconcileFixedMusicians() {
+  const bySlug = new Map();
+  const oldIdToNewId = new Map();
+  const realSlugSet = new Set(DEFAULT_MUSICIANS.map((musician) => slugify(musician.name)));
 
-  state.musicians.slice(0, OLD_DEMO_MUSICIANS.length).forEach((musician, index) => {
-    musician.name = DEFAULT_MUSICIANS[index].name;
-    musician.mainRole = DEFAULT_MUSICIANS[index].mainRole;
+  state.musicians.forEach((musician, index) => {
+    const currentSlug = slugify(musician.name);
+    const fallbackSlug = slugify(DEFAULT_MUSICIANS[index]?.name || "");
+    const targetSlug = LEGACY_MUSICIAN_ALIASES[currentSlug] || (realSlugSet.has(currentSlug) ? currentSlug : fallbackSlug);
+    if (targetSlug && !bySlug.has(targetSlug)) bySlug.set(targetSlug, musician);
   });
 
-  DEFAULT_MUSICIANS.slice(OLD_DEMO_MUSICIANS.length).forEach((musician) => {
-    state.musicians.push({ id: crypto.randomUUID(), ...musician });
+  const fixedMusicians = DEFAULT_MUSICIANS.map((defaultMusician) => {
+    const slug = slugify(defaultMusician.name);
+    const existing = bySlug.get(slug);
+    const id = existing?.id || crypto.randomUUID();
+    if (existing?.id && existing.id !== id) oldIdToNewId.set(existing.id, id);
+    return { id, ...defaultMusician };
   });
 
+  state.musicians.forEach((musician, index) => {
+    const currentSlug = slugify(musician.name);
+    const fallbackSlug = slugify(DEFAULT_MUSICIANS[index]?.name || "");
+    const targetSlug = LEGACY_MUSICIAN_ALIASES[currentSlug] || (realSlugSet.has(currentSlug) ? currentSlug : fallbackSlug);
+    const target = fixedMusicians.find((item) => slugify(item.name) === targetSlug);
+    if (target && musician.id !== target.id) oldIdToNewId.set(musician.id, target.id);
+  });
+
+  state.musicians = fixedMusicians;
   state.missions.forEach((mission) => {
     mission.members.forEach((member) => {
+      if (oldIdToNewId.has(member.musicianId)) member.musicianId = oldIdToNewId.get(member.musicianId);
       const musician = musicianById(member.musicianId);
       if (musician) member.role = musician.mainRole;
     });
   });
+
+  if (oldIdToNewId.has(profile.musicianId)) {
+    profile.musicianId = oldIdToNewId.get(profile.musicianId);
+    saveProfile();
+  }
 }
 
 function setView(view) {
@@ -450,11 +479,13 @@ function renderScale() {
 
   if (!mission) {
     els.memberList.append(els.emptyTemplate.content.cloneNode(true));
+    renderScaleSongPicker();
     return;
   }
 
   if (!mission.members.length) {
     els.memberList.innerHTML = `<div class="empty-state"><strong>Escala vazia</strong><span>Selecione músicos cadastrados para esta missão.</span></div>`;
+    renderScaleSongPicker();
     return;
   }
 
