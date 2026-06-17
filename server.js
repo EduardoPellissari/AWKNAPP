@@ -2,7 +2,6 @@ import express from "express";
 import pg from "pg";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import webpush from "web-push";
 
 const { Pool } = pg;
 const __filename = fileURLToPath(import.meta.url);
@@ -21,8 +20,19 @@ const pool = databaseUrl
       ssl: databaseUrl.includes("localhost") ? false : { rejectUnauthorized: false },
     })
   : null;
+let webpush = null;
 
-webpush.setVapidDetails("mailto:awkn@app.local", vapidPublicKey, vapidPrivateKey);
+try {
+  webpush = (await import("web-push")).default;
+} catch (error) {
+  console.warn("Modulo web-push indisponivel. Notificacoes push desativadas.", error.message);
+}
+
+const pushReady = Boolean(webpush && vapidPublicKey && vapidPrivateKey);
+
+if (pushReady) {
+  webpush.setVapidDetails("mailto:awkn@app.local", vapidPublicKey, vapidPrivateKey);
+}
 
 app.use(express.json({ limit: "2mb" }));
 
@@ -32,10 +42,11 @@ app.use("/api", (_request, response, next) => {
 });
 
 app.get("/api/health", (_request, response) => {
-  response.json({ ok: true, database: Boolean(pool), push: Boolean(vapidPublicKey && vapidPrivateKey) });
+  response.json({ ok: true, database: Boolean(pool), push: pushReady });
 });
 
 app.get("/api/push/public-key", (_request, response) => {
+  if (!pushReady) return response.status(503).json({ error: "Notificacoes push nao configuradas no servidor." });
   response.json({ publicKey: vapidPublicKey });
 });
 
@@ -93,6 +104,7 @@ app.post("/api/push/unsubscribe", async (request, response) => {
 
 app.post("/api/push/test", async (request, response) => {
   try {
+    if (!pushReady) return response.status(503).json({ error: "Notificacoes push nao configuradas no servidor." });
     if (!pool) return response.status(503).json({ error: "Banco de dados indisponivel." });
     const { musicianId } = request.body || {};
     if (!musicianId) return response.status(400).json({ error: "Musico invalido." });
@@ -319,6 +331,7 @@ function assignmentKey(mission, member) {
 }
 
 async function sendPushToMusician(musicianId, payload) {
+  if (!pushReady) return 0;
   const result = await pool.query("SELECT id, subscription FROM push_subscriptions WHERE musician_id = $1", [musicianId]);
   let sent = 0;
   await Promise.all(

@@ -998,10 +998,10 @@ function enableNotifications() {
       alert("Permita notificações para receber avisos de escala.");
       return;
     }
-    const ok = await syncPushSubscription({ refresh: true });
-    if (ok) {
+    const result = await syncPushSubscription({ refresh: true });
+    if (result.ok) {
       const status = await getPushStatus();
-      const localShown = showLocalNotification("Teste local AWKN", "Se esta notificação apareceu, o celular permitiu notificações.");
+      const localShown = await showLocalNotification("Teste local AWKN", "Se esta notificação apareceu, o celular permitiu notificações.");
       const tested = await sendTestPush();
       const registered = status?.subscriptions || 0;
       alert(
@@ -1011,7 +1011,7 @@ function enableNotifications() {
       );
     } else {
       alert(
-        `Não consegui cadastrar este aparelho.\n\nPermissão: ${Notification.permission}.\nModo app instalado: ${isStandaloneApp() ? "sim" : "não"}.\nPush suportado: ${"PushManager" in window ? "sim" : "não"}.\n\nNo iPhone, abra pelo ícone instalado na Tela de Início.`
+        `Não consegui cadastrar este aparelho.\n\nEtapa: ${result.step || "cadastro"}.\nDetalhe: ${result.message || "sem detalhe informado"}.\n\nPermissão: ${Notification.permission}.\nModo app instalado: ${isStandaloneApp() ? "sim" : "não"}.\nPush suportado: ${"PushManager" in window ? "sim" : "não"}.\n\nNo iPhone, abra pelo ícone instalado na Tela de Início.`
       );
     }
     maybeNotifyAssignment(true);
@@ -1019,14 +1019,44 @@ function enableNotifications() {
 }
 
 async function syncPushSubscription({ refresh = false } = {}) {
-  if (!profile.musicianId || !("Notification" in window) || Notification.permission !== "granted") return false;
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
+  if (!profile.musicianId) return pushSetupFailure("login", "Entre com seu login antes de ativar notificações.");
+  if (!("Notification" in window)) return pushSetupFailure("permissão", "Este aparelho não liberou a API de notificações.");
+  if (Notification.permission !== "granted") return pushSetupFailure("permissão", "A permissão de notificações ainda não está liberada.");
+  if (!("serviceWorker" in navigator)) return pushSetupFailure("service worker", "Este navegador não liberou o serviço de notificações do app.");
+  if (!("PushManager" in window)) return pushSetupFailure("push", "Este navegador não liberou notificações automáticas.");
   try {
-    const registration = await navigator.serviceWorker.ready;
+    const registration = await navigator.serviceWorker.register("./sw.js");
+    await registration.update().catch(() => {});
+    const readyRegistration = await navigator.serviceWorker.ready;
+    const activeRegistration = readyRegistration || registration;
+
     const publicKeyResponse = await fetch(PUSH_PUBLIC_KEY_URL, { cache: "no-store" });
-    if (!publicKeyResponse.ok) return false;
-    const { publicKey } = await publicKeyResponse.json();
-    const existing = await registration.pushManager.getSubscription();
+    const publicKeyText = await publicKeyResponse.text();
+    if (!publicKeyResponse.ok) {
+      return pushSetupFailure("chave do servidor", `Resposta ${publicKeyResponse.status}: ${shortText(publicKeyText)}`);
+    }
+
+    let publicKeyData = {};
+    try {
+      publicKeyData = JSON.parse(publicKeyText);
+    } catch {
+      return pushSetupFailure("chave do servidor", `Resposta inválida: ${shortText(publicKeyText)}`);
+    }
+
+    const publicKey = publicKeyData.publicKey;
+    if (!publicKey) return pushSetupFailure("chave do servidor", "A chave pública de notificações não chegou do servidor.");
+
+    let applicationServerKey;
+    try {
+      applicationServerKey = urlBase64ToUint8Array(publicKey);
+    } catch (error) {
+      return pushSetupFailure("chave do servidor", `A chave pública está inválida. ${errorMessage(error)}`);
+    }
+    if (applicationServerKey.length !== 65) {
+      return pushSetupFailure("chave do servidor", `A chave pública está com tamanho inválido (${applicationServerKey.length} bytes).`);
+    }
+
+    const existing = await activeRegistration.pushManager.getSubscription();
     if (existing && refresh) {
       await fetch(PUSH_UNSUBSCRIBE_URL, {
         method: "POST",
@@ -1035,26 +1065,75 @@ async function syncPushSubscription({ refresh = false } = {}) {
       }).catch(() => {});
       await existing.unsubscribe().catch(() => {});
     }
-    const subscription =
-      (!refresh && existing) ||
-      (await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      }));
+
+    let subscription = !refresh && existing ? existing : null;
+    if (!subscription) {
+      try {
+        subscription = await activeRegistration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey,
+        });
+      } catch (error) {
+        return pushSetupFailure("assinatura do aparelho", errorMessage(error));
+      }
+    }
+
+    if (!subscription?.endpoint) {
+      return pushSetupFailure("assinatura do aparelho", "O aparelho não gerou um endereço de notificação.");
+    }
+
     const response = await fetch(PUSH_SUBSCRIBE_URL, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ musicianId: profile.musicianId, subscription }),
     });
-    return response.ok;
-  } catch {
-    return false;
+    const responseText = await response.text();
+    let responseData = {};
+    try {
+      responseData = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      responseData = {};
+    }
+    if (!response.ok) {
+      return pushSetupFailure("cadastro no servidor", `Resposta ${response.status}: ${responseData.error || shortText(responseText)}`);
+    }
+
+    return { ok: true, endpoint: subscription.endpoint };
+  } catch (error) {
+    return pushSetupFailure("erro inesperado", errorMessage(error));
   }
 }
 
-function showLocalNotification(title, body) {
+function pushSetupFailure(step, message) {
+  return { ok: false, step, message };
+}
+
+function shortText(value) {
+  return String(value || "sem resposta").replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
+function errorMessage(error) {
+  if (!error) return "Erro desconhecido.";
+  const name = error.name ? `${error.name}: ` : "";
+  return `${name}${error.message || String(error)}`;
+}
+
+async function showLocalNotification(title, body) {
   if (!("Notification" in window) || Notification.permission !== "granted") return false;
   try {
+    if ("serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      if (registration?.showNotification) {
+        await registration.showNotification(title, {
+          body,
+          icon: "./icon-192.png",
+          badge: "./icon-192.png",
+          data: { url: "./" },
+        });
+        return true;
+      }
+    }
+
     new Notification(title, {
       body,
       icon: "./icon-192.png",
@@ -1104,9 +1183,8 @@ function checkInAppNotifications() {
   saveProfile();
 
   if ("Notification" in window && Notification.permission === "granted") {
-    new Notification(next.title, {
-      body: next.body,
-      icon: "./icon-192.png",
+    showLocalNotification(next.title, next.body).then((shown) => {
+      if (!shown) alert(`${next.title}\n\n${next.body}\n\nConfirme sua presença na aba Escala.`);
     });
     return;
   }
@@ -1143,9 +1221,8 @@ function maybeNotifyAssignment(force = false) {
     alert(`${title}\n\n${body}\n\nConfirme sua presença na aba Escala.`);
     return;
   }
-  new Notification(title, {
-    body,
-    icon: "./icon-192.png",
+  showLocalNotification(title, body).then((shown) => {
+    if (!shown) alert(`${title}\n\n${body}\n\nConfirme sua presença na aba Escala.`);
   });
 }
 

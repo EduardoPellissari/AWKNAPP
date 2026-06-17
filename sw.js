@@ -1,4 +1,4 @@
-const CACHE_NAME = "ministerio-musica-v24";
+const CACHE_NAME = "ministerio-musica-v25";
 const ASSETS = [
   "./",
   "./index.html",
@@ -47,7 +47,13 @@ self.addEventListener("fetch", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  const data = event.data?.json() || {};
+  let data = {};
+  try {
+    data = event.data?.json() || {};
+  } catch {
+    data = { body: event.data?.text() || "Você tem uma nova missão no app." };
+  }
+
   const title = data.title || "Nova escala";
   event.waitUntil(
     self.registration.showNotification(title, {
