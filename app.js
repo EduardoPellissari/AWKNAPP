@@ -1,7 +1,7 @@
 const STORAGE_KEY = "ministerio-musica-dados-v2";
 const PROFILE_KEY = "ministerio-musica-perfil-v1";
 const SAVED_LOGINS_KEY = "ministerio-musica-logins-v1";
-const APP_VERSION = "v27";
+const APP_VERSION = "v28";
 const API_STATE_URL = "/api/state";
 const API_HEALTH_URL = "/api/health";
 const PUSH_PUBLIC_KEY_URL = "/api/push/public-key";
@@ -296,7 +296,7 @@ async function showSyncDetails() {
     const remoteData = await readJsonResponse(stateResponse);
 
     if (!healthResponse.ok || !stateResponse.ok) {
-      const detail = health?.error || remoteData?.error || `Servidor respondeu ${healthResponse.status}/${stateResponse.status}`;
+      const detail = serverDetail(health, remoteData) || `Servidor respondeu ${healthResponse.status}/${stateResponse.status}`;
       setSyncStatus("offline", detail);
       alert(syncDetailText({ health, remoteData, localMissionCount, error: detail }));
       return;
@@ -330,14 +330,20 @@ function syncDetailText({ health, remoteData, localMissionCount, error }) {
     `App: ${APP_VERSION}`,
     `URL aberta: ${window.location.origin}`,
     `Banco conectado: ${health?.database ? "sim" : "não"}`,
+    `Estrutura do banco: ${health?.schema ? "ok" : "com erro"}`,
     `Push configurado: ${health?.push ? "sim" : "não"}`,
     `Missões antes neste aparelho: ${localMissionCount}`,
     `Missões agora neste aparelho: ${state.missions.length}`,
     `Missões no banco: ${remoteMissions.length}`,
     latestMission ? `Última missão no banco: ${latestMission.title || "Sem título"} (${latestMission.date || "sem data"})` : "Última missão no banco: nenhuma",
     remoteData?.updatedAt ? `Banco atualizado em: ${formatDateTime(remoteData.updatedAt)}` : "",
+    serverDetail(health, remoteData) ? `Detalhe do servidor: ${serverDetail(health, remoteData)}` : "",
     error ? `Erro: ${error}` : "",
   ].filter(Boolean).join("\n");
+}
+
+function serverDetail(health, remoteData) {
+  return [remoteData?.error, remoteData?.detail, health?.databaseError, health?.schemaError].filter(Boolean).join(" ");
 }
 
 async function readJsonResponse(response) {

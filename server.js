@@ -41,8 +41,17 @@ app.use("/api", (_request, response, next) => {
   next();
 });
 
-app.get("/api/health", (_request, response) => {
-  response.json({ ok: true, database: Boolean(pool), push: pushReady });
+app.get("/api/health", async (_request, response) => {
+  const database = await checkDatabase();
+  const schema = database.ok ? await checkSchema() : { ok: false, detail: database.detail };
+  response.json({
+    ok: true,
+    database: database.ok,
+    schema: schema.ok,
+    push: pushReady,
+    databaseError: database.detail || "",
+    schemaError: schema.detail || "",
+  });
 });
 
 app.get("/api/push/public-key", (_request, response) => {
@@ -61,7 +70,10 @@ app.get("/api/push/status", async (request, response) => {
     response.json({ ok: true, database: true, subscriptions: result.rows[0]?.count || 0 });
   } catch (error) {
     console.error(error);
-    response.status(500).json({ error: "Nao foi possivel consultar notificacoes." });
+    response.status(500).json({
+      error: "Nao foi possivel consultar notificacoes.",
+      detail: databaseErrorDetail(error),
+    });
   }
 });
 
@@ -101,7 +113,10 @@ app.post("/api/push/unsubscribe", async (request, response) => {
     response.json({ ok: true });
   } catch (error) {
     console.error(error);
-    response.status(500).json({ error: "Nao foi possivel remover notificacao." });
+    response.status(500).json({
+      error: "Nao foi possivel remover notificacao.",
+      detail: databaseErrorDetail(error),
+    });
   }
 });
 
@@ -120,7 +135,10 @@ app.post("/api/push/test", async (request, response) => {
     response.json({ ok: true, sent });
   } catch (error) {
     console.error(error);
-    response.status(500).json({ error: "Nao foi possivel testar notificacao." });
+    response.status(500).json({
+      error: "Nao foi possivel testar notificacao.",
+      detail: databaseErrorDetail(error),
+    });
   }
 });
 
@@ -132,7 +150,10 @@ app.get("/api/state", async (_request, response) => {
     response.json(result.rows[0]?.value || {});
   } catch (error) {
     console.error(error);
-    response.status(500).json({ error: "Nao foi possivel carregar os dados." });
+    response.status(500).json({
+      error: "Nao foi possivel carregar os dados.",
+      detail: databaseErrorDetail(error),
+    });
   }
 });
 
@@ -156,7 +177,10 @@ app.put("/api/state", async (request, response) => {
     sendAssignmentNotifications(assignmentNotifications).catch((error) => console.error(error));
   } catch (error) {
     console.error(error);
-    response.status(500).json({ error: "Nao foi possivel salvar os dados." });
+    response.status(500).json({
+      error: "Nao foi possivel salvar os dados.",
+      detail: databaseErrorDetail(error),
+    });
   }
 });
 
@@ -187,6 +211,17 @@ async function ensureSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS key TEXT");
+  await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS value JSONB NOT NULL DEFAULT '{}'::jsonb");
+  await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()");
+  await pool.query("DELETE FROM app_state WHERE key IS NULL");
+  await pool.query(`
+    DELETE FROM app_state older
+    USING app_state newer
+    WHERE older.ctid < newer.ctid
+      AND older.key = newer.key
+  `);
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS app_state_key_unique ON app_state (key)");
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -197,15 +232,19 @@ async function ensureSchema() {
     )
   `);
 
+  await pool.query("ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS musician_id TEXT");
+  await pool.query("ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS endpoint TEXT");
+  await pool.query("ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS subscription JSONB");
   await pool.query("ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()");
   await pool.query("ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()");
+  await pool.query("DELETE FROM push_subscriptions WHERE musician_id IS NULL OR endpoint IS NULL OR subscription IS NULL");
   await pool.query(`
     DELETE FROM push_subscriptions older
     USING push_subscriptions newer
-    WHERE older.id < newer.id
+    WHERE older.ctid < newer.ctid
       AND older.endpoint = newer.endpoint
   `);
-  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_endpoint_key ON push_subscriptions (endpoint)");
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_endpoint_unique ON push_subscriptions (endpoint)");
 }
 
 function mergeAppState(previousState = {}, incomingState = {}) {
@@ -343,7 +382,7 @@ function assignmentKey(mission, member) {
 
 async function sendPushToMusician(musicianId, payload) {
   if (!pushReady) return 0;
-  const result = await pool.query("SELECT id, subscription FROM push_subscriptions WHERE musician_id = $1", [musicianId]);
+  const result = await pool.query("SELECT endpoint, subscription FROM push_subscriptions WHERE musician_id = $1", [musicianId]);
   let sent = 0;
   await Promise.all(
     result.rows.map(async (row) => {
@@ -352,7 +391,7 @@ async function sendPushToMusician(musicianId, payload) {
         sent += 1;
       } catch (error) {
         if (error.statusCode === 404 || error.statusCode === 410) {
-          await pool.query("DELETE FROM push_subscriptions WHERE id = $1", [row.id]);
+          await pool.query("DELETE FROM push_subscriptions WHERE endpoint = $1", [row.endpoint]);
           return;
         }
         console.error(error);
@@ -370,4 +409,23 @@ function formatPushDate(value) {
 
 function databaseErrorDetail(error) {
   return [error?.code, error?.message].filter(Boolean).join(": ").slice(0, 240) || "Erro interno sem detalhe.";
+}
+
+async function checkDatabase() {
+  if (!pool) return { ok: false, detail: "DATABASE_URL nao configurada." };
+  try {
+    await pool.query("SELECT 1");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, detail: databaseErrorDetail(error) };
+  }
+}
+
+async function checkSchema() {
+  try {
+    await ensureSchema();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, detail: databaseErrorDetail(error) };
+  }
 }
