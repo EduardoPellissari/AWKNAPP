@@ -47,7 +47,7 @@ Se o Render pedir Docker, cancele e crie manualmente:
    - Name: `awknapp-db`
 2. New + > Web Service
    - Runtime: Node
-   - Build Command: `npm install`
+   - Build Command: `npm install --package-lock=false`
    - Start Command: `npm start`
    - Health Check Path: `/api/health`
 3. Em Environment, adicione:

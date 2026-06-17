@@ -2,7 +2,7 @@ services:
   - type: web
     name: awknapp
     runtime: node
-    buildCommand: npm install
+    buildCommand: npm install --package-lock=false
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeploy: true

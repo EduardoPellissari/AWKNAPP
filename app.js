@@ -4,6 +4,7 @@ const SAVED_LOGINS_KEY = "ministerio-musica-logins-v1";
 const API_STATE_URL = "/api/state";
 const PUSH_PUBLIC_KEY_URL = "/api/push/public-key";
 const PUSH_SUBSCRIBE_URL = "/api/push/subscribe";
+const SYNC_INTERVAL_MS = 10000;
 const ROLES = ["Voz", "Violão", "Guitarra", "Baixo", "Teclado", "Bateria"];
 const DEFAULT_MUSICIANS = [
   { name: "Julian", mainRole: "Voz" },
@@ -47,6 +48,7 @@ let activeSetlistType = "Missa";
 let activeMoment = SETLIST_TYPES[activeSetlistType][0];
 let saveTimer = null;
 let deferredInstallPrompt = null;
+let isHydrating = false;
 
 const els = {
   loginScreen: document.querySelector("#loginScreen"),
@@ -117,6 +119,7 @@ const els = {
 seedIfEmpty();
 wireEvents();
 hydrateFromApi();
+startAutoSync();
 render();
 
 if ("serviceWorker" in navigator) {
@@ -179,7 +182,17 @@ function logout() {
   render();
 }
 
-async function hydrateFromApi() {
+function startAutoSync() {
+  setInterval(() => hydrateFromApi({ silent: true }), SYNC_INTERVAL_MS);
+  window.addEventListener("focus", () => hydrateFromApi());
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) hydrateFromApi();
+  });
+}
+
+async function hydrateFromApi({ silent = false } = {}) {
+  if (isHydrating) return;
+  isHydrating = true;
   try {
     const response = await fetch(API_STATE_URL, { headers: { accept: "application/json" } });
     if (!response.ok) return;
@@ -193,11 +206,12 @@ async function hydrateFromApi() {
     Object.assign(state, remote);
     reconcileFixedMusicians();
     saveLocalState();
-    await saveRemoteState();
     render();
-    maybeNotifyAssignment();
+    if (!silent) maybeNotifyAssignment();
   } catch {
     // Local file use keeps working without the hosted API.
+  } finally {
+    isHydrating = false;
   }
 }
 
@@ -220,14 +234,24 @@ function scheduleSave() {
 
 async function saveRemoteState() {
   try {
-    await fetch(API_STATE_URL, {
+    const response = await fetch(API_STATE_URL, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(toPersistedState()),
     });
+    return response.ok;
   } catch {
     // The local copy is already saved; sync resumes when the hosted API is reachable.
+    return false;
   }
+}
+
+async function saveNow() {
+  clearTimeout(saveTimer);
+  saveLocalState();
+  const saved = await saveRemoteState();
+  if (saved) hydrateFromApi({ silent: true });
+  return saved;
 }
 
 function loadLocalState() {
@@ -712,7 +736,7 @@ function addAssignment(event) {
     });
   }
   els.memberForm.reset();
-  scheduleSave();
+  saveNow();
   render();
   maybeNotifyAssignment();
 }
