@@ -1,18 +1,23 @@
 :root {
   color-scheme: dark;
-  --ink: #f8f8f3;
-  --muted: #b8bbb7;
-  --line: rgba(255, 255, 255, 0.14);
-  --paper: rgba(255, 255, 255, 0.08);
-  --panel: rgba(18, 18, 18, 0.84);
-  --brand: #f8f8f3;
+  --ink: #fbfaf4;
+  --muted: #aeb3b2;
+  --line: rgba(255, 255, 255, 0.12);
+  --line-strong: rgba(255, 255, 255, 0.2);
+  --paper: rgba(255, 255, 255, 0.075);
+  --paper-strong: rgba(255, 255, 255, 0.12);
+  --panel: rgba(13, 14, 16, 0.82);
+  --panel-solid: #111214;
+  --brand: #fbfaf4;
   --brand-2: #1fb6ff;
   --accent: #ffb000;
   --pink: #ff4ecd;
   --green: #29e58f;
   --danger: #ff5a68;
-  --soft: rgba(255, 255, 255, 0.1);
-  --shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+  --nav-height: 78px;
+  --radius: 8px;
+  --shadow: 0 28px 80px rgba(0, 0, 0, 0.46);
+  --shadow-soft: 0 16px 42px rgba(0, 0, 0, 0.32);
 }
 
 * {
@@ -24,13 +29,26 @@ body {
   min-height: 100vh;
   color: var(--ink);
   background:
-    radial-gradient(circle at 8% 3%, rgba(31, 182, 255, 0.72), transparent 22%),
-    radial-gradient(circle at 42% 0%, rgba(255, 176, 0, 0.7), transparent 18%),
-    radial-gradient(circle at 92% 88%, rgba(31, 182, 255, 0.82), transparent 24%),
-    radial-gradient(circle at 42% 96%, rgba(255, 176, 0, 0.62), transparent 20%),
-    linear-gradient(135deg, #0d0d0f, #1a1a1c 45%, #080808);
+    radial-gradient(circle at 8% 0%, rgba(31, 182, 255, 0.5), transparent 22%),
+    radial-gradient(circle at 42% -6%, rgba(255, 176, 0, 0.46), transparent 18%),
+    radial-gradient(circle at 96% 92%, rgba(31, 182, 255, 0.5), transparent 24%),
+    radial-gradient(circle at 42% 104%, rgba(255, 176, 0, 0.34), transparent 20%),
+    linear-gradient(145deg, #060607, #151619 46%, #08080a);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-text-size-adjust: 100%;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.28), transparent 68%);
 }
 
 button,
@@ -59,8 +77,9 @@ button {
   place-items: center;
   padding: 20px;
   background:
-    radial-gradient(circle at 10% 0%, rgba(31, 182, 255, 0.66), transparent 24%),
-    radial-gradient(circle at 88% 92%, rgba(255, 176, 0, 0.58), transparent 26%),
+    radial-gradient(circle at 8% 0%, rgba(31, 182, 255, 0.54), transparent 25%),
+    radial-gradient(circle at 50% 2%, rgba(255, 176, 0, 0.3), transparent 22%),
+    radial-gradient(circle at 92% 96%, rgba(255, 78, 205, 0.24), transparent 26%),
     rgba(5, 5, 6, 0.96);
 }
 
@@ -72,18 +91,22 @@ button {
   display: grid;
   gap: 16px;
   width: min(420px, 100%);
-  padding: 24px;
-  background: rgba(18, 18, 18, 0.9);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  padding: 26px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 42%),
+    rgba(14, 15, 17, 0.9);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
+  backdrop-filter: blur(24px);
 }
 
 .login-card img {
   width: 98px;
   height: 98px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--radius);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.38), 0 0 34px rgba(31, 182, 255, 0.24);
 }
 
 .login-card h1 {
@@ -113,11 +136,16 @@ button {
 .login-quick-button {
   min-height: 44px;
   padding: 0 10px;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.075);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   font-weight: 800;
+}
+
+.login-quick-button:hover {
+  background: linear-gradient(135deg, rgba(31, 182, 255, 0.18), rgba(255, 176, 0, 0.13));
+  border-color: var(--line-strong);
 }
 
 .login-quick-button:active {
@@ -129,9 +157,11 @@ button {
   flex-direction: column;
   gap: 28px;
   padding: 28px 20px;
-  background: rgba(11, 11, 12, 0.72);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 36%),
+    rgba(8, 9, 11, 0.74);
   border-right: 1px solid var(--line);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(22px);
 }
 
 .brand {
@@ -144,8 +174,8 @@ button {
   width: 54px;
   height: 54px;
   object-fit: cover;
-  border-radius: 8px;
-  box-shadow: 0 0 28px rgba(31, 182, 255, 0.28);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.32), 0 0 28px rgba(31, 182, 255, 0.28);
 }
 
 .brand strong,
@@ -176,22 +206,26 @@ button {
 .danger-button,
 .icon-button {
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   min-height: 44px;
-  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .tab-button {
+  position: relative;
   padding: 12px 14px;
   text-align: left;
   color: var(--muted);
   background: transparent;
+  border: 1px solid transparent;
 }
 
 .tab-button.active,
 .tab-button:hover {
   color: var(--brand);
-  background: linear-gradient(90deg, rgba(31, 182, 255, 0.24), rgba(255, 78, 205, 0.14));
+  background: linear-gradient(90deg, rgba(31, 182, 255, 0.2), rgba(255, 78, 205, 0.12));
+  border-color: var(--line);
+  box-shadow: inset 3px 0 0 rgba(255, 176, 0, 0.85);
 }
 
 .sidebar-footer {
@@ -241,9 +275,9 @@ main {
   min-height: 44px;
   padding: 4px 4px 4px 14px;
   color: var(--brand);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.075);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 
 .eyebrow {
@@ -274,22 +308,25 @@ h2 {
 .ghost-button,
 .danger-button {
   padding: 0 16px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .primary-button {
   color: #111;
   background: linear-gradient(135deg, #f8f8f3, #ffb000);
+  box-shadow: 0 12px 28px rgba(255, 176, 0, 0.2);
 }
 
 .secondary-button {
   color: #061015;
   background: linear-gradient(135deg, var(--brand-2), var(--green));
+  box-shadow: 0 12px 28px rgba(31, 182, 255, 0.18);
 }
 
 .ghost-button {
   color: var(--brand);
-  background: rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.085);
+  border: 1px solid var(--line);
 }
 
 .danger-button {
@@ -300,12 +337,14 @@ h2 {
 .icon-button {
   width: 44px;
   color: var(--brand);
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--line);
   font-size: 1.7rem;
 }
 
 button:hover {
   transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
 }
 
 button:disabled {
@@ -337,10 +376,12 @@ button:disabled {
   padding: 18px;
   color: #fff;
   background:
-    radial-gradient(circle at 14% 0%, rgba(31, 182, 255, 0.45), transparent 36%),
-    radial-gradient(circle at 86% 100%, rgba(255, 176, 0, 0.42), transparent 34%),
-    #101010;
-  border-radius: 8px;
+    radial-gradient(circle at 10% 0%, rgba(31, 182, 255, 0.45), transparent 34%),
+    radial-gradient(circle at 52% 0%, rgba(255, 176, 0, 0.24), transparent 30%),
+    radial-gradient(circle at 88% 100%, rgba(255, 78, 205, 0.24), transparent 34%),
+    #0d0e10;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
   overflow: hidden;
 }
@@ -349,7 +390,8 @@ button:disabled {
   width: 112px;
   height: 112px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--radius);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.34);
 }
 
 .cover-panel .eyebrow {
@@ -363,10 +405,13 @@ button:disabled {
 }
 
 .panel {
-  background: var(--panel);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), transparent 38%),
+    var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(18px);
 }
 
 .calendar-panel,
@@ -415,10 +460,16 @@ button:disabled {
   min-height: 92px;
   padding: 10px;
   color: var(--ink);
-  background: var(--paper);
+  background: rgba(255, 255, 255, 0.07);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   text-align: left;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.day:hover {
+  background: rgba(255, 255, 255, 0.105);
+  border-color: var(--line-strong);
 }
 
 .day.outside {
@@ -427,10 +478,12 @@ button:disabled {
 
 .day.today {
   border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(255, 176, 0, 0.34);
 }
 
 .day.selected {
-  outline: 3px solid rgba(47, 111, 99, 0.22);
+  outline: 3px solid rgba(31, 182, 255, 0.22);
+  background: linear-gradient(180deg, rgba(31, 182, 255, 0.14), rgba(255, 255, 255, 0.08));
 }
 
 .day-number {
@@ -443,7 +496,7 @@ button:disabled {
   padding: 6px 7px;
   overflow: hidden;
   color: #fff;
-  background: linear-gradient(135deg, rgba(31, 182, 255, 0.95), rgba(255, 78, 205, 0.82));
+  background: linear-gradient(135deg, rgba(31, 182, 255, 0.95), rgba(255, 176, 0, 0.82));
   border-radius: 6px;
   font-size: 0.76rem;
   line-height: 1.25;
@@ -484,9 +537,10 @@ button:disabled {
   justify-content: space-between;
   gap: 12px;
   padding: 12px;
-  background: var(--paper);
+  background: rgba(255, 255, 255, 0.075);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
 }
 
 .form-grid {
@@ -511,9 +565,9 @@ textarea {
   padding: 12px 13px;
   font-size: 16px;
   color: var(--ink);
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(0, 0, 0, 0.32);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   outline: none;
 }
 
@@ -525,7 +579,7 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--brand-2);
-  box-shadow: 0 0 0 3px rgba(47, 111, 99, 0.16);
+  box-shadow: 0 0 0 3px rgba(31, 182, 255, 0.14);
 }
 
 .span-2 {
@@ -586,7 +640,8 @@ textarea:focus {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
+  font-weight: 800;
 }
 
 .moment-tab.active,
@@ -639,7 +694,7 @@ textarea:focus {
   color: var(--danger);
   background: rgba(255, 90, 104, 0.14);
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   font-weight: 900;
 }
 
@@ -650,9 +705,9 @@ textarea:focus {
   min-height: 180px;
   padding: 22px;
   text-align: center;
-  background: var(--paper);
+  background: rgba(255, 255, 255, 0.065);
   border: 1px dashed var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 
 .hidden {
@@ -662,9 +717,9 @@ textarea:focus {
 @media (max-width: 920px) {
   body {
     background:
-      radial-gradient(circle at 0% 0%, rgba(31, 182, 255, 0.48), transparent 20%),
-      radial-gradient(circle at 100% 100%, rgba(255, 176, 0, 0.44), transparent 26%),
-      linear-gradient(160deg, #09090a, #171719 52%, #070708);
+      radial-gradient(circle at 0% 0%, rgba(31, 182, 255, 0.38), transparent 22%),
+      radial-gradient(circle at 100% 100%, rgba(255, 176, 0, 0.34), transparent 28%),
+      linear-gradient(160deg, #070708, #141518 52%, #060607);
   }
 
   .app-shell {
@@ -680,11 +735,14 @@ textarea:focus {
     top: auto;
     z-index: 12;
     display: block;
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-    background: rgba(8, 8, 9, 0.88);
+    padding: 9px 10px calc(9px + env(safe-area-inset-bottom));
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent),
+      rgba(7, 8, 10, 0.9);
     border-top: 1px solid var(--line);
     border-right: 0;
-    backdrop-filter: blur(20px);
+    box-shadow: 0 -18px 46px rgba(0, 0, 0, 0.42);
+    backdrop-filter: blur(24px);
   }
 
   .brand,
@@ -694,26 +752,30 @@ textarea:focus {
 
   .nav-tabs {
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 6px;
+    gap: 7px;
   }
 
   .tab-button {
     display: grid;
     place-items: center;
-    min-height: 54px;
+    min-height: 56px;
     padding: 8px 4px;
     text-align: center;
-    border-radius: 8px;
+    border-radius: var(--radius);
     font-size: 0.78rem;
     font-weight: 800;
+    border: 1px solid transparent;
   }
 
   .tab-button.active {
-    background: linear-gradient(135deg, rgba(31, 182, 255, 0.28), rgba(255, 176, 0, 0.18));
+    color: var(--ink);
+    background: linear-gradient(135deg, rgba(31, 182, 255, 0.22), rgba(255, 176, 0, 0.16));
+    border-color: var(--line-strong);
+    box-shadow: inset 0 2px 0 rgba(255, 176, 0, 0.74);
   }
 
   main {
-    padding: calc(14px + env(safe-area-inset-top)) 14px calc(92px + env(safe-area-inset-bottom));
+    padding: calc(14px + env(safe-area-inset-top)) 14px calc(98px + env(safe-area-inset-bottom));
   }
 
   .topbar {
@@ -722,12 +784,14 @@ textarea:focus {
     z-index: 8;
     align-items: stretch;
     flex-direction: column;
-    gap: 14px;
+    gap: 12px;
     margin: -14px -14px 16px;
     padding: calc(14px + env(safe-area-inset-top)) 14px 14px;
-    background: rgba(9, 9, 10, 0.78);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent),
+      rgba(8, 9, 11, 0.84);
     border-bottom: 1px solid var(--line);
-    backdrop-filter: blur(18px);
+    backdrop-filter: blur(22px);
   }
 
   .top-actions {
@@ -746,6 +810,7 @@ textarea:focus {
     justify-content: space-between;
     min-height: 46px;
     padding-left: 12px;
+    background: rgba(255, 255, 255, 0.075);
   }
 
   .top-actions .primary-button {
@@ -758,7 +823,7 @@ textarea:focus {
   }
 
   h1 {
-    font-size: 1.55rem;
+    font-size: 1.46rem;
     line-height: 1.05;
   }
 
@@ -768,7 +833,7 @@ textarea:focus {
 
   .cover-panel,
   .panel {
-    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.28);
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.26);
   }
 
   .panel-header {
@@ -803,6 +868,7 @@ textarea:focus {
     grid-template-columns: 64px minmax(0, 1fr);
     gap: 12px;
     padding: 12px;
+    margin-bottom: 14px;
   }
 
   .cover-panel img {
@@ -823,7 +889,7 @@ textarea:focus {
   .selected-panel,
   .form-grid,
   .panel {
-    padding: 14px;
+    padding: 15px;
   }
 
   .calendar-panel .panel-header {
@@ -842,11 +908,11 @@ textarea:focus {
   }
 
   .calendar-grid {
-    gap: 5px;
+    gap: 6px;
   }
 
   .day {
-    min-height: 50px;
+    min-height: 52px;
     padding: 6px;
     border-radius: 7px;
   }
@@ -882,6 +948,7 @@ textarea:focus {
 
   .item-card {
     gap: 10px;
+    padding: 13px;
   }
 
   .item-card .ghost-button,
@@ -908,6 +975,12 @@ textarea:focus {
   .ghost-button,
   .danger-button {
     min-height: 48px;
+  }
+
+  .top-actions .ghost-button,
+  .top-actions .primary-button {
+    padding: 0 10px;
+    font-size: 0.9rem;
   }
 
   .moment-tabs,

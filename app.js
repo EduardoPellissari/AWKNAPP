@@ -25,6 +25,13 @@ const SETLIST_TYPES = {
   Missa: ["Entrada", "Ato penitencial", "Glória", "Salmo", "Aleluia", "Ofertório", "Santo", "Comunhão", "Final"],
   Grupos: ["Animação", "Louvor", "Pregação", "Oração", "Adoração", "Final"],
 };
+const VIEW_TITLES = {
+  agenda: ["Planejamento pastoral", "Agenda do ministério"],
+  missao: ["Cadastro da missão", "Criar ou editar missão"],
+  escala: ["Equipe e músicas", "Escala da missão"],
+  musicos: ["Cadastro fixo", "Músicos do ministério"],
+  setlist: ["Repertório", "Setlist da missão"],
+};
 const MOMENTS = [...new Set(Object.values(SETLIST_TYPES).flat())];
 const KEYS = [
   "C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B",
@@ -48,6 +55,8 @@ const els = {
   loginError: document.querySelector("#loginError"),
   logoutButton: document.querySelector("#logoutButton"),
   currentUserName: document.querySelector("#currentUserName"),
+  topEyebrow: document.querySelector("#topEyebrow"),
+  topTitle: document.querySelector("#topTitle"),
   installButton: document.querySelector("#installButton"),
   missionCount: document.querySelector("#missionCount"),
   exportButton: document.querySelector("#exportButton"),
@@ -392,6 +401,9 @@ function reconcileFixedMusicians() {
 function setView(view) {
   els.tabButtons.forEach((button) => button.classList.toggle("active", button.dataset.view === view));
   Object.entries(els.views).forEach(([key, element]) => element.classList.toggle("active", key === view));
+  const [eyebrow, title] = VIEW_TITLES[view] || VIEW_TITLES.agenda;
+  els.topEyebrow.textContent = eyebrow;
+  els.topTitle.textContent = title;
 }
 
 function render() {
