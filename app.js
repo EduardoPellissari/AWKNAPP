@@ -43,6 +43,7 @@ const els = {
   loginForm: document.querySelector("#loginForm"),
   loginEmail: document.querySelector("#loginEmail"),
   loginOptions: document.querySelector("#loginOptions"),
+  loginQuickList: document.querySelector("#loginQuickList"),
   loginPassword: document.querySelector("#loginPassword"),
   loginError: document.querySelector("#loginError"),
   logoutButton: document.querySelector("#logoutButton"),
@@ -147,6 +148,18 @@ function login(event) {
 
   profile.musicianId = musician.id;
   profile.login = loginValue;
+  saveProfile();
+  els.loginError.textContent = "";
+  els.loginForm.reset();
+  render();
+  maybeNotifyAssignment(true);
+}
+
+function quickLogin(musician) {
+  reconcileFixedMusicians();
+  const fixedMusician = findMusicianForLogin(musician.name) || musician;
+  profile.musicianId = fixedMusician.id;
+  profile.login = loginForMusician(fixedMusician);
   saveProfile();
   els.loginError.textContent = "";
   els.loginForm.reset();
@@ -925,6 +938,17 @@ function renderLoginOptions() {
   els.loginOptions.innerHTML = state.musicians
     .map((musician) => `<option value="${escapeAttribute(loginForMusician(musician))}">${escapeHtml(musician.name)}</option>`)
     .join("");
+
+  if (!els.loginQuickList) return;
+  els.loginQuickList.innerHTML = "";
+  state.musicians.forEach((musician) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "login-quick-button";
+    button.textContent = musician.name;
+    button.addEventListener("click", () => quickLogin(musician));
+    els.loginQuickList.append(button);
+  });
 }
 
 function slugify(value) {

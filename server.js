@@ -57,7 +57,7 @@ app.use(
   express.static(__dirname, {
     extensions: ["html"],
     setHeaders(response, filePath) {
-      if (filePath.endsWith("sw.js") || filePath.endsWith("manifest.json")) {
+      if (/\.(html|js|css|json)$/.test(filePath) || filePath.endsWith("sw.js")) {
         response.setHeader("Cache-Control", "no-cache");
       }
     },
