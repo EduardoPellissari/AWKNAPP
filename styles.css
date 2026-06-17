@@ -127,29 +127,22 @@ button {
   line-height: 1.35;
 }
 
-.login-quick-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.login-quick-button {
-  min-height: 44px;
-  padding: 0 10px;
+.save-login-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.075);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  font-weight: 800;
+  font-size: 0.9rem;
 }
 
-.login-quick-button:hover {
-  background: linear-gradient(135deg, rgba(31, 182, 255, 0.18), rgba(255, 176, 0, 0.13));
-  border-color: var(--line-strong);
+.save-login-row input {
+  width: 18px;
+  min-height: 18px;
+  accent-color: var(--accent);
 }
 
-.login-quick-button:active {
-  transform: translateY(1px);
+.saved-login-label select {
+  color: var(--ink);
 }
 
 .sidebar {

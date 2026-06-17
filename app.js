@@ -1,5 +1,6 @@
 const STORAGE_KEY = "ministerio-musica-dados-v2";
 const PROFILE_KEY = "ministerio-musica-perfil-v1";
+const SAVED_LOGINS_KEY = "ministerio-musica-logins-v1";
 const API_STATE_URL = "/api/state";
 const ROLES = ["Voz", "Violão", "Guitarra", "Baixo", "Teclado", "Bateria"];
 const DEFAULT_MUSICIANS = [
@@ -50,7 +51,9 @@ const els = {
   loginForm: document.querySelector("#loginForm"),
   loginEmail: document.querySelector("#loginEmail"),
   loginOptions: document.querySelector("#loginOptions"),
-  loginQuickList: document.querySelector("#loginQuickList"),
+  savedLoginLabel: document.querySelector("#savedLoginLabel"),
+  savedLoginSelect: document.querySelector("#savedLoginSelect"),
+  saveLoginCheckbox: document.querySelector("#saveLoginCheckbox"),
   loginPassword: document.querySelector("#loginPassword"),
   loginError: document.querySelector("#loginError"),
   logoutButton: document.querySelector("#logoutButton"),
@@ -120,6 +123,7 @@ if ("serviceWorker" in navigator) {
 
 function wireEvents() {
   els.loginForm.addEventListener("submit", login);
+  els.savedLoginSelect.addEventListener("change", useSavedLogin);
   els.logoutButton.addEventListener("click", logout);
   els.installButton.addEventListener("click", installApp);
   window.addEventListener("beforeinstallprompt", (event) => {
@@ -157,18 +161,7 @@ function login(event) {
 
   profile.musicianId = musician.id;
   profile.login = loginValue;
-  saveProfile();
-  els.loginError.textContent = "";
-  els.loginForm.reset();
-  render();
-  maybeNotifyAssignment(true);
-}
-
-function quickLogin(musician) {
-  reconcileFixedMusicians();
-  const fixedMusician = findMusicianForLogin(musician.name) || musician;
-  profile.musicianId = fixedMusician.id;
-  profile.login = loginForMusician(fixedMusician);
+  if (els.saveLoginCheckbox.checked) saveLogin(loginValue);
   saveProfile();
   els.loginError.textContent = "";
   els.loginForm.reset();
@@ -256,6 +249,28 @@ function loadProfile() {
 
 function saveProfile() {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+}
+
+function loadSavedLogins() {
+  try {
+    const logins = JSON.parse(localStorage.getItem(SAVED_LOGINS_KEY) || "[]");
+    return Array.isArray(logins) ? logins.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLogin(loginValue) {
+  const normalized = normalizeLoginInput(loginValue);
+  const saved = loadSavedLogins().filter((login) => login !== normalized);
+  saved.unshift(normalized);
+  localStorage.setItem(SAVED_LOGINS_KEY, JSON.stringify(saved.slice(0, 12)));
+}
+
+function useSavedLogin() {
+  if (!els.savedLoginSelect.value) return;
+  els.loginEmail.value = els.savedLoginSelect.value;
+  els.loginPassword.focus();
 }
 
 function toPersistedState() {
@@ -951,15 +966,14 @@ function renderLoginOptions() {
     .map((musician) => `<option value="${escapeAttribute(loginForMusician(musician))}">${escapeHtml(musician.name)}</option>`)
     .join("");
 
-  if (!els.loginQuickList) return;
-  els.loginQuickList.innerHTML = "";
-  state.musicians.forEach((musician) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "login-quick-button";
-    button.textContent = musician.name;
-    button.addEventListener("click", () => quickLogin(musician));
-    els.loginQuickList.append(button);
+  const savedLogins = loadSavedLogins();
+  els.savedLoginLabel.classList.toggle("hidden", !savedLogins.length);
+  els.savedLoginSelect.innerHTML = `<option value="">Selecionar login salvo</option>`;
+  savedLogins.forEach((login) => {
+    const option = document.createElement("option");
+    option.value = login;
+    option.textContent = login;
+    els.savedLoginSelect.append(option);
   });
 }
 

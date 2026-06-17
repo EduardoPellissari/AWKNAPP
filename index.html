@@ -28,12 +28,19 @@
           <input id="loginEmail" autocomplete="username" list="loginOptions" required placeholder="Julian ou julian@awkn" />
           <datalist id="loginOptions"></datalist>
         </label>
+        <label id="savedLoginLabel" class="saved-login-label hidden">
+          Logins salvos neste aparelho
+          <select id="savedLoginSelect"></select>
+        </label>
         <label>
           Senha
           <input id="loginPassword" autocomplete="current-password" required type="password" placeholder="2026" />
         </label>
-        <p class="login-helper">Use seu nome ou seu login com @awkn. Senha: 2026.</p>
-        <div id="loginQuickList" class="login-quick-list" aria-label="Entrar rapidamente"></div>
+        <label class="save-login-row">
+          <input id="saveLoginCheckbox" type="checkbox" />
+          <span>Salvar este login neste aparelho</span>
+        </label>
+        <p class="login-helper">Use seu login individual com @awkn. Senha: 2026.</p>
         <p id="loginError" class="form-error" role="alert"></p>
         <button class="primary-button" type="submit">Entrar</button>
       </form>
