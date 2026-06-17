@@ -97,6 +97,13 @@ button {
   font-weight: 700;
 }
 
+.login-helper {
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;

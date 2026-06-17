@@ -25,12 +25,14 @@
         </div>
         <label>
           Login
-          <input id="loginEmail" autocomplete="username" required placeholder="nome@awkn" />
+          <input id="loginEmail" autocomplete="username" list="loginOptions" required placeholder="Julian ou julian@awkn" />
+          <datalist id="loginOptions"></datalist>
         </label>
         <label>
           Senha
           <input id="loginPassword" autocomplete="current-password" required type="password" placeholder="2026" />
         </label>
+        <p class="login-helper">Use seu nome ou seu login com @awkn. Senha: 2026.</p>
         <p id="loginError" class="form-error" role="alert"></p>
         <button class="primary-button" type="submit">Entrar</button>
       </form>

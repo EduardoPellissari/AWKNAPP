@@ -42,6 +42,7 @@ const els = {
   loginScreen: document.querySelector("#loginScreen"),
   loginForm: document.querySelector("#loginForm"),
   loginEmail: document.querySelector("#loginEmail"),
+  loginOptions: document.querySelector("#loginOptions"),
   loginPassword: document.querySelector("#loginPassword"),
   loginError: document.querySelector("#loginError"),
   logoutButton: document.querySelector("#logoutButton"),
@@ -134,17 +135,18 @@ function wireEvents() {
 
 function login(event) {
   event.preventDefault();
-  const email = normalizeLoginInput(els.loginEmail.value);
+  reconcileFixedMusicians();
+  const loginValue = normalizeLoginInput(els.loginEmail.value);
   const password = els.loginPassword.value.trim();
-  const musician = state.musicians.find((item) => loginForMusician(item) === email);
+  const musician = findMusicianForLogin(els.loginEmail.value);
 
   if (!musician || password !== "2026") {
-    els.loginError.textContent = "Login ou senha incorretos.";
+    els.loginError.textContent = "Login ou senha incorretos. Use seu nome ou nome@awkn com senha 2026.";
     return;
   }
 
   profile.musicianId = musician.id;
-  profile.login = email;
+  profile.login = loginValue;
   saveProfile();
   els.loginError.textContent = "";
   els.loginForm.reset();
@@ -395,6 +397,7 @@ function renderLoginState() {
   const musician = musicianById(profile.musicianId);
   els.loginScreen.classList.toggle("hidden", Boolean(musician));
   els.currentUserName.textContent = musician ? musician.name : "Sem login";
+  renderLoginOptions();
 }
 
 function renderSelectors() {
@@ -903,10 +906,25 @@ function loginForMusician(musician) {
   return `${slugify(musician.name)}@awkn`;
 }
 
+function findMusicianForLogin(value) {
+  const wantedLogin = normalizeLoginInput(value);
+  const wantedName = slugify(String(value).split("@")[0] || value);
+  return (
+    state.musicians.find((musician) => loginForMusician(musician) === wantedLogin) ||
+    state.musicians.find((musician) => slugify(musician.name) === wantedName)
+  );
+}
+
 function normalizeLoginInput(value) {
-  const cleaned = String(value).trim().toLowerCase();
-  const [name, domain = "awkn"] = cleaned.split("@");
-  return `${slugify(name)}@${slugify(domain) || "awkn"}`;
+  const [name] = String(value).trim().toLowerCase().split("@");
+  return `${slugify(name)}@awkn`;
+}
+
+function renderLoginOptions() {
+  if (!els.loginOptions) return;
+  els.loginOptions.innerHTML = state.musicians
+    .map((musician) => `<option value="${escapeAttribute(loginForMusician(musician))}">${escapeHtml(musician.name)}</option>`)
+    .join("");
 }
 
 function slugify(value) {
