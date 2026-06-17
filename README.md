@@ -68,6 +68,18 @@ Depois de publicado, abra a URL do Render no celular:
 
 Tambem existe um botao **Baixar app** dentro do aplicativo.
 
+### Notificacoes automaticas
+
+Para receber notificacoes quando for escalado:
+
+1. Cada musico precisa abrir o app no proprio celular.
+2. Entrar com o login individual.
+3. Tocar em **Notificacoes** e permitir.
+
+Depois disso, quando esse musico for escalado em uma nova missao, o servidor envia a notificacao para o celular cadastrado.
+
+No iPhone, notificacoes automaticas funcionam pelo app instalado na Tela de Inicio. No Android, funcionam pelo Chrome/app instalado.
+
 ## Rodar localmente
 
 ```bash

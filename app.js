@@ -2,6 +2,8 @@ const STORAGE_KEY = "ministerio-musica-dados-v2";
 const PROFILE_KEY = "ministerio-musica-perfil-v1";
 const SAVED_LOGINS_KEY = "ministerio-musica-logins-v1";
 const API_STATE_URL = "/api/state";
+const PUSH_PUBLIC_KEY_URL = "/api/push/public-key";
+const PUSH_SUBSCRIBE_URL = "/api/push/subscribe";
 const ROLES = ["Voz", "Violão", "Guitarra", "Baixo", "Teclado", "Bateria"];
 const DEFAULT_MUSICIANS = [
   { name: "Julian", mainRole: "Voz" },
@@ -166,6 +168,7 @@ function login(event) {
   els.loginError.textContent = "";
   els.loginForm.reset();
   render();
+  syncPushSubscription();
   maybeNotifyAssignment();
 }
 
@@ -904,11 +907,49 @@ function enableNotifications() {
     return;
   }
 
-  if (!("Notification" in window)) {
-    alert("Este aparelho não suporta notificações do navegador.");
+  if (!profile.musicianId) {
+    alert("Entre com seu login antes de ativar notificações.");
     return;
   }
-  Notification.requestPermission().then(() => maybeNotifyAssignment(true));
+
+  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    alert("Este aparelho ou navegador não suporta notificações automáticas. No iPhone, instale o app na tela inicial e abra por lá.");
+    return;
+  }
+  Notification.requestPermission().then(async (permission) => {
+    if (permission !== "granted") {
+      alert("Permita notificações para receber avisos de escala.");
+      return;
+    }
+    const ok = await syncPushSubscription();
+    if (ok) alert("Notificações automáticas ativadas neste aparelho.");
+    maybeNotifyAssignment(true);
+  });
+}
+
+async function syncPushSubscription() {
+  if (!profile.musicianId || !("Notification" in window) || Notification.permission !== "granted") return false;
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const publicKeyResponse = await fetch(PUSH_PUBLIC_KEY_URL);
+    if (!publicKeyResponse.ok) return false;
+    const { publicKey } = await publicKeyResponse.json();
+    const subscription =
+      (await registration.pushManager.getSubscription()) ||
+      (await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      }));
+    const response = await fetch(PUSH_SUBSCRIBE_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ musicianId: profile.musicianId, subscription }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 function maybeNotifyAssignment(force = false) {
@@ -973,6 +1014,13 @@ function markAssignmentNotified(key) {
 
 function nativeNotifications() {
   return window.Capacitor?.Plugins?.LocalNotifications || null;
+}
+
+function urlBase64ToUint8Array(value) {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const base64 = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
 }
 
 function loginForMusician(musician) {
