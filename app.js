@@ -4,6 +4,7 @@ const SAVED_LOGINS_KEY = "ministerio-musica-logins-v1";
 const API_STATE_URL = "/api/state";
 const PUSH_PUBLIC_KEY_URL = "/api/push/public-key";
 const PUSH_SUBSCRIBE_URL = "/api/push/subscribe";
+const PUSH_UNSUBSCRIBE_URL = "/api/push/unsubscribe";
 const PUSH_TEST_URL = "/api/push/test";
 const PUSH_STATUS_URL = "/api/push/status";
 const SYNC_INTERVAL_MS = 10000;
@@ -997,22 +998,27 @@ function enableNotifications() {
       alert("Permita notificações para receber avisos de escala.");
       return;
     }
-    const ok = await syncPushSubscription();
+    const ok = await syncPushSubscription({ refresh: true });
     if (ok) {
       const status = await getPushStatus();
+      const localShown = showLocalNotification("Teste local AWKN", "Se esta notificação apareceu, o celular permitiu notificações.");
       const tested = await sendTestPush();
       const registered = status?.subscriptions || 0;
       alert(
         tested
-          ? `Notificações automáticas ativadas. Aparelhos cadastrados neste login: ${registered}. Um teste foi enviado.`
-          : `Notificações ativadas, mas o teste não foi confirmado pelo servidor. Aparelhos cadastrados neste login: ${registered}.`
+          ? `Notificações ativadas.\n\nAparelhos cadastrados neste login: ${registered}.\nTeste local: ${localShown ? "enviado" : "não exibido"}.\nTeste do servidor: enviado.`
+          : `Notificações ativadas, mas o teste do servidor não foi confirmado.\n\nAparelhos cadastrados neste login: ${registered}.\nTeste local: ${localShown ? "enviado" : "não exibido"}.`
+      );
+    } else {
+      alert(
+        `Não consegui cadastrar este aparelho.\n\nPermissão: ${Notification.permission}.\nModo app instalado: ${isStandaloneApp() ? "sim" : "não"}.\nPush suportado: ${"PushManager" in window ? "sim" : "não"}.\n\nNo iPhone, abra pelo ícone instalado na Tela de Início.`
       );
     }
     maybeNotifyAssignment(true);
   });
 }
 
-async function syncPushSubscription() {
+async function syncPushSubscription({ refresh = false } = {}) {
   if (!profile.musicianId || !("Notification" in window) || Notification.permission !== "granted") return false;
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
   try {
@@ -1020,8 +1026,17 @@ async function syncPushSubscription() {
     const publicKeyResponse = await fetch(PUSH_PUBLIC_KEY_URL, { cache: "no-store" });
     if (!publicKeyResponse.ok) return false;
     const { publicKey } = await publicKeyResponse.json();
+    const existing = await registration.pushManager.getSubscription();
+    if (existing && refresh) {
+      await fetch(PUSH_UNSUBSCRIBE_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ endpoint: existing.endpoint }),
+      }).catch(() => {});
+      await existing.unsubscribe().catch(() => {});
+    }
     const subscription =
-      (await registration.pushManager.getSubscription()) ||
+      (!refresh && existing) ||
       (await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey),
@@ -1032,6 +1047,19 @@ async function syncPushSubscription() {
       body: JSON.stringify({ musicianId: profile.musicianId, subscription }),
     });
     return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+function showLocalNotification(title, body) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return false;
+  try {
+    new Notification(title, {
+      body,
+      icon: "./icon-192.png",
+    });
+    return true;
   } catch {
     return false;
   }
@@ -1148,6 +1176,10 @@ function markAssignmentNotified(key) {
 
 function nativeNotifications() {
   return window.Capacitor?.Plugins?.LocalNotifications || null;
+}
+
+function isStandaloneApp() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 }
 
 function urlBase64ToUint8Array(value) {
