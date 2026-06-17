@@ -1,7 +1,9 @@
 const STORAGE_KEY = "ministerio-musica-dados-v2";
 const PROFILE_KEY = "ministerio-musica-perfil-v1";
 const SAVED_LOGINS_KEY = "ministerio-musica-logins-v1";
+const APP_VERSION = "v27";
 const API_STATE_URL = "/api/state";
+const API_HEALTH_URL = "/api/health";
 const PUSH_PUBLIC_KEY_URL = "/api/push/public-key";
 const PUSH_SUBSCRIBE_URL = "/api/push/subscribe";
 const PUSH_UNSUBSCRIBE_URL = "/api/push/unsubscribe";
@@ -139,7 +141,7 @@ function wireEvents() {
   els.savedLoginSelect.addEventListener("change", useSavedLogin);
   els.logoutButton.addEventListener("click", logout);
   els.installButton.addEventListener("click", installApp);
-  els.syncStatus.addEventListener("click", () => alert(syncStatus.message || els.syncStatus.textContent));
+  els.syncStatus.addEventListener("click", showSyncDetails);
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     deferredInstallPrompt = event;
@@ -221,7 +223,7 @@ async function hydrateFromApi({ silent = false } = {}) {
     reconcileFixedMusicians();
     saveLocalState();
     render();
-    setSyncStatus("online", "Sincronizado");
+    setSyncStatus("online", syncMessage(data));
     checkInAppNotifications();
     if (!silent) maybeNotifyAssignment();
   } catch (error) {
@@ -272,7 +274,7 @@ async function saveRemoteState() {
         reconcileFixedMusicians();
         saveLocalState();
       }
-      setSyncStatus("online", "Sincronizado");
+      setSyncStatus("online", syncMessage(data?.state || data));
     }
     return response.ok;
   } catch (error) {
@@ -280,6 +282,62 @@ async function saveRemoteState() {
     // The local copy is already saved; sync resumes when the hosted API is reachable.
     return false;
   }
+}
+
+async function showSyncDetails() {
+  const localMissionCount = state.missions.length;
+  setSyncStatus("checking", "Verificando sincronização");
+  try {
+    const [healthResponse, stateResponse] = await Promise.all([
+      fetch(API_HEALTH_URL, { cache: "no-store", headers: { accept: "application/json" } }),
+      fetch(API_STATE_URL, { cache: "no-store", headers: { accept: "application/json" } }),
+    ]);
+    const health = await readJsonResponse(healthResponse);
+    const remoteData = await readJsonResponse(stateResponse);
+
+    if (!healthResponse.ok || !stateResponse.ok) {
+      const detail = health?.error || remoteData?.error || `Servidor respondeu ${healthResponse.status}/${stateResponse.status}`;
+      setSyncStatus("offline", detail);
+      alert(syncDetailText({ health, remoteData, localMissionCount, error: detail }));
+      return;
+    }
+
+    const remote = normalizeState(remoteData || {});
+    Object.assign(state, remote);
+    reconcileFixedMusicians();
+    saveLocalState();
+    render();
+    setSyncStatus("online", syncMessage(remoteData));
+    alert(syncDetailText({ health, remoteData, localMissionCount }));
+  } catch (error) {
+    const detail = errorMessage(error);
+    setSyncStatus("offline", detail);
+    alert(syncDetailText({ localMissionCount, error: detail }));
+  }
+}
+
+function syncMessage(data) {
+  const count = Array.isArray(data?.missions) ? data.missions.length : state.missions.length;
+  return `Sincronizado às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. Banco com ${count} ${count === 1 ? "missão" : "missões"}.`;
+}
+
+function syncDetailText({ health, remoteData, localMissionCount, error }) {
+  const remoteMissions = Array.isArray(remoteData?.missions) ? remoteData.missions : [];
+  const latestMission = [...remoteMissions].sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")))[0];
+  return [
+    "Diagnóstico de sincronização",
+    "",
+    `App: ${APP_VERSION}`,
+    `URL aberta: ${window.location.origin}`,
+    `Banco conectado: ${health?.database ? "sim" : "não"}`,
+    `Push configurado: ${health?.push ? "sim" : "não"}`,
+    `Missões antes neste aparelho: ${localMissionCount}`,
+    `Missões agora neste aparelho: ${state.missions.length}`,
+    `Missões no banco: ${remoteMissions.length}`,
+    latestMission ? `Última missão no banco: ${latestMission.title || "Sem título"} (${latestMission.date || "sem data"})` : "Última missão no banco: nenhuma",
+    remoteData?.updatedAt ? `Banco atualizado em: ${formatDateTime(remoteData.updatedAt)}` : "",
+    error ? `Erro: ${error}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 async function readJsonResponse(response) {
@@ -1431,6 +1489,12 @@ function dateFromInput(value) {
 
 function formatDate(value) {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "full" }).format(dateFromInput(value));
+}
+
+function formatDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
 }
 
 function getDateOffset(days) {
