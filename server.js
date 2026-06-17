@@ -39,6 +39,21 @@ app.get("/api/push/public-key", (_request, response) => {
   response.json({ publicKey: vapidPublicKey });
 });
 
+app.get("/api/push/status", async (request, response) => {
+  try {
+    if (!pool) return response.json({ ok: true, database: false, subscriptions: 0 });
+    const musicianId = request.query.musicianId;
+    await ensureSchema();
+    const result = musicianId
+      ? await pool.query("SELECT COUNT(*)::int AS count FROM push_subscriptions WHERE musician_id = $1", [musicianId])
+      : await pool.query("SELECT COUNT(*)::int AS count FROM push_subscriptions");
+    response.json({ ok: true, database: true, subscriptions: result.rows[0]?.count || 0 });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Nao foi possivel consultar notificacoes." });
+  }
+});
+
 app.post("/api/push/subscribe", async (request, response) => {
   try {
     if (!pool) return response.status(503).json({ error: "Banco de dados indisponivel." });
@@ -113,6 +128,8 @@ app.put("/api/state", async (request, response) => {
     const previous = await pool.query("SELECT value FROM app_state WHERE key = $1", ["main"]);
     const previousState = previous.rows[0]?.value || {};
     const nextState = mergeAppState(previousState, request.body || {});
+    const assignmentNotifications = newAssignmentNotifications(previousState, nextState);
+    nextState.notifications = mergeNotifications(nextState.notifications, assignmentNotifications);
     await pool.query(
       `INSERT INTO app_state (key, value, updated_at)
        VALUES ($1, $2, NOW())
@@ -121,7 +138,7 @@ app.put("/api/state", async (request, response) => {
       ["main", nextState]
     );
     response.json({ ok: true, state: nextState });
-    notifyNewAssignments(previousState, nextState).catch((error) => console.error(error));
+    sendAssignmentNotifications(assignmentNotifications).catch((error) => console.error(error));
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Nao foi possivel salvar os dados." });
@@ -176,6 +193,7 @@ function mergeAppState(previousState = {}, incomingState = {}) {
     musicians: mergeById(previousState.musicians, incomingState.musicians, "mainRole"),
     missions,
     songLibrary: mergeSongs(previousState.songLibrary, incomingState.songLibrary),
+    notifications: mergeNotifications(previousState.notifications, incomingState.notifications),
     deletedMissionIds,
     activeMissionId: missions.some((mission) => mission.id === activeMissionId) ? activeMissionId : missions[0]?.id || null,
     visibleDate: incomingState.visibleDate || previousState.visibleDate,
@@ -237,23 +255,52 @@ function mergeSongs(previous = [], incoming = []) {
   return [...map.values()];
 }
 
-async function notifyNewAssignments(previousState, nextState) {
-  if (!pool) return;
+function mergeNotifications(previous = [], incoming = []) {
+  const map = new Map();
+  [...(previous || []), ...(incoming || [])].forEach((notification) => {
+    if (!notification?.id) return;
+    const current = map.get(notification.id) || {};
+    map.set(notification.id, { ...current, ...notification });
+  });
+  return [...map.values()].sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || ""))).slice(-200);
+}
+
+function newAssignmentNotifications(previousState, nextState) {
   const previousKeys = assignmentKeys(previousState);
+  const existingNotificationKeys = new Set((previousState.notifications || []).map((notification) => notification.assignmentKey));
   const musiciansById = new Map((nextState.musicians || []).map((musician) => [musician.id, musician]));
+  const notifications = [];
   for (const mission of nextState.missions || []) {
     for (const member of mission.members || []) {
       const key = assignmentKey(mission, member);
-      if (previousKeys.has(key)) continue;
+      if (previousKeys.has(key) || existingNotificationKeys.has(key)) continue;
       const musician = musiciansById.get(member.musicianId);
-      await sendPushToMusician(member.musicianId, {
+      notifications.push({
+        id: `assignment-${key}`,
+        assignmentKey: key,
+        musicianId: member.musicianId,
+        missionId: mission.id,
         title: "Você foi escalado(a)",
         body: `${mission.title} - ${formatPushDate(mission.date)} às ${mission.time}`,
         url: "/",
-        missionId: mission.id,
         musicianName: musician?.name || "",
+        createdAt: new Date().toISOString(),
       });
     }
+  }
+  return notifications;
+}
+
+async function sendAssignmentNotifications(notifications) {
+  if (!pool || !notifications.length) return;
+  for (const notification of notifications) {
+    await sendPushToMusician(notification.musicianId, {
+      title: notification.title,
+      body: notification.body,
+      url: notification.url,
+      missionId: notification.missionId,
+      musicianName: notification.musicianName,
+    });
   }
 }
 

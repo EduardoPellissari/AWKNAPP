@@ -5,6 +5,7 @@ const API_STATE_URL = "/api/state";
 const PUSH_PUBLIC_KEY_URL = "/api/push/public-key";
 const PUSH_SUBSCRIBE_URL = "/api/push/subscribe";
 const PUSH_TEST_URL = "/api/push/test";
+const PUSH_STATUS_URL = "/api/push/status";
 const SYNC_INTERVAL_MS = 10000;
 const ROLES = ["Voz", "Violão", "Guitarra", "Baixo", "Teclado", "Bateria"];
 const DEFAULT_MUSICIANS = [
@@ -173,6 +174,7 @@ function login(event) {
   els.loginForm.reset();
   render();
   syncPushSubscription();
+  checkInAppNotifications();
   maybeNotifyAssignment();
 }
 
@@ -208,6 +210,7 @@ async function hydrateFromApi({ silent = false } = {}) {
     reconcileFixedMusicians();
     saveLocalState();
     render();
+    checkInAppNotifications();
     if (!silent) maybeNotifyAssignment();
   } catch {
     // Local file use keeps working without the hosted API.
@@ -314,6 +317,7 @@ function toPersistedState() {
     musicians: state.musicians,
     missions: state.missions,
     songLibrary: state.songLibrary,
+    notifications: state.notifications || [],
     deletedMissionIds: state.deletedMissionIds || [],
     activeMissionId: state.activeMissionId,
     visibleDate: inputFromDate(state.visibleDate),
@@ -325,6 +329,7 @@ function normalizeState(data) {
   const missions = Array.isArray(data.missions) ? data.missions : [];
   const musicians = Array.isArray(data.musicians) ? data.musicians : [];
   const songLibrary = Array.isArray(data.songLibrary) ? data.songLibrary : [];
+  const notifications = Array.isArray(data.notifications) ? data.notifications : [];
   const deletedMissionIds = Array.isArray(data.deletedMissionIds) ? data.deletedMissionIds : [];
   return {
     musicians: musicians.map((musician) => ({
@@ -365,6 +370,16 @@ function normalizeState(data) {
       key: KEYS.includes(song.key) ? song.key : "C",
       type: SETLIST_TYPES[song.type] ? song.type : "Missa",
       moment: MOMENTS.includes(song.moment) ? song.moment : "Entrada",
+    })),
+    notifications: notifications.map((notification) => ({
+      id: notification.id || crypto.randomUUID(),
+      assignmentKey: notification.assignmentKey || "",
+      musicianId: notification.musicianId || "",
+      missionId: notification.missionId || "",
+      title: notification.title || "Você foi escalado(a)",
+      body: notification.body || "",
+      url: notification.url || "/",
+      createdAt: notification.createdAt || new Date().toISOString(),
     })),
     deletedMissionIds,
     activeMissionId: data.activeMissionId || null,
@@ -984,8 +999,14 @@ function enableNotifications() {
     }
     const ok = await syncPushSubscription();
     if (ok) {
+      const status = await getPushStatus();
       const tested = await sendTestPush();
-      alert(tested ? "Notificações automáticas ativadas. Um teste foi enviado para este aparelho." : "Notificações ativadas, mas o teste não foi confirmado pelo servidor.");
+      const registered = status?.subscriptions || 0;
+      alert(
+        tested
+          ? `Notificações automáticas ativadas. Aparelhos cadastrados neste login: ${registered}. Um teste foi enviado.`
+          : `Notificações ativadas, mas o teste não foi confirmado pelo servidor. Aparelhos cadastrados neste login: ${registered}.`
+      );
     }
     maybeNotifyAssignment(true);
   });
@@ -1029,6 +1050,40 @@ async function sendTestPush() {
   } catch {
     return false;
   }
+}
+
+async function getPushStatus() {
+  try {
+    const params = new URLSearchParams({ musicianId: profile.musicianId });
+    const response = await fetch(`${PUSH_STATUS_URL}?${params.toString()}`, { cache: "no-store" });
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+function checkInAppNotifications() {
+  if (!profile.musicianId) return;
+  const seen = new Set(profile.seenNotificationIds || []);
+  const next = (state.notifications || [])
+    .filter((notification) => notification.musicianId === profile.musicianId && !seen.has(notification.id))
+    .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")))[0];
+  if (!next) return;
+
+  seen.add(next.id);
+  profile.seenNotificationIds = [...seen].slice(-100);
+  saveProfile();
+
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(next.title, {
+      body: next.body,
+      icon: "./icon-192.png",
+    });
+    return;
+  }
+
+  alert(`${next.title}\n\n${next.body}\n\nConfirme sua presença na aba Escala.`);
 }
 
 function maybeNotifyAssignment(force = false) {

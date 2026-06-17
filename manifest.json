@@ -1,8 +1,9 @@
 {
   "name": "Ministério de Música",
   "short_name": "Ministério",
-  "start_url": "./index.html",
-  "scope": "./",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#101010",

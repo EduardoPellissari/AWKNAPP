@@ -744,29 +744,29 @@ textarea:focus {
   }
 
   .nav-tabs {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 7px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    padding: 0 2px 2px;
-    scrollbar-width: none;
-  }
-
-  .nav-tabs::-webkit-scrollbar {
-    display: none;
   }
 
   .tab-button {
-    flex: 0 0 76px;
+    min-width: 0;
     display: grid;
     place-items: center;
-    min-height: 56px;
-    padding: 8px 4px;
+    min-height: 54px;
+    padding: 7px 2px;
     text-align: center;
     border-radius: var(--radius);
-    font-size: 0.78rem;
+    font-size: clamp(0.62rem, 2.35vw, 0.74rem);
     font-weight: 800;
     border: 1px solid transparent;
+  }
+
+  .tab-button span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .tab-button.active {
@@ -1035,8 +1035,7 @@ textarea:focus {
   }
 
   .tab-button {
-    flex-basis: 72px;
-    font-size: 0.7rem;
+    font-size: 0.62rem;
   }
 
   .day {
