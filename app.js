@@ -166,7 +166,7 @@ function login(event) {
   els.loginError.textContent = "";
   els.loginForm.reset();
   render();
-  maybeNotifyAssignment(true);
+  maybeNotifyAssignment();
 }
 
 function logout() {
@@ -307,6 +307,7 @@ function normalizeState(data) {
             musicianId: member.musicianId || findMusicianByName(member.name)?.id || "",
             role: ROLES.includes(member.role) ? member.role : "Voz",
             confirmed: Boolean(member.confirmed),
+            assignedAt: member.assignedAt || mission.date || new Date().toISOString(),
           }))
         : [],
       songs: Array.isArray(mission.songs)
@@ -350,6 +351,7 @@ function seedIfEmpty() {
           musicianId: musician.id,
           role: musician.mainRole,
           confirmed: false,
+          assignedAt: new Date().toISOString(),
         })),
         songs: [
           { id: crypto.randomUUID(), name: "Vem, Espírito Santo", key: "D", type: "Missa", moment: "Entrada" },
@@ -696,8 +698,15 @@ function addAssignment(event) {
   const existing = mission.members.find((member) => member.musicianId === musicianId);
   if (existing) {
     existing.role = musician.mainRole;
+    existing.assignedAt = new Date().toISOString();
   } else {
-    mission.members.push({ id: crypto.randomUUID(), musicianId, role: musician.mainRole, confirmed: false });
+    mission.members.push({
+      id: crypto.randomUUID(),
+      musicianId,
+      role: musician.mainRole,
+      confirmed: false,
+      assignedAt: new Date().toISOString(),
+    });
   }
   els.memberForm.reset();
   scheduleSave();
@@ -904,16 +913,12 @@ function enableNotifications() {
 
 function maybeNotifyAssignment(force = false) {
   if (!profile.musicianId) return;
-  const next = state.missions
-    .filter((mission) => mission.date >= inputFromDate(new Date()))
-    .find((mission) => mission.members.some((member) => member.musicianId === profile.musicianId));
-  if (!next) return;
-  const key = `${profile.musicianId}:${next.id}`;
-  if (!force && profile.lastNotificationKey === key) return;
-  profile.lastNotificationKey = key;
-  saveProfile();
+  const assignment = nextAssignmentForProfile(force);
+  if (!assignment) return;
+  const { mission, member, key } = assignment;
   const title = "Você foi escalado(a)";
-  const body = `${next.title} - ${formatDate(next.date)} às ${next.time}`;
+  const body = `${mission.title} - ${formatDate(mission.date)} às ${mission.time}`;
+  markAssignmentNotified(key);
   const localNotifications = nativeNotifications();
   if (localNotifications) {
     localNotifications
@@ -931,11 +936,39 @@ function maybeNotifyAssignment(force = false) {
     return;
   }
 
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
-  new Notification("Você foi escalado(a)", {
+  if (!("Notification" in window) || Notification.permission !== "granted") {
+    alert(`${title}\n\n${body}\n\nConfirme sua presença na aba Escala.`);
+    return;
+  }
+  new Notification(title, {
     body,
     icon: "./icon-192.png",
   });
+}
+
+function nextAssignmentForProfile(force = false) {
+  const notified = new Set(profile.notifiedAssignmentKeys || []);
+  const today = inputFromDate(new Date());
+  const upcomingMissions = state.missions.filter((mission) => mission.date >= today);
+  for (const mission of upcomingMissions) {
+    const member = mission.members.find((item) => item.musicianId === profile.musicianId);
+    if (!member) continue;
+    const key = assignmentNotificationKey(mission, member);
+    if (force || !notified.has(key)) return { mission, member, key };
+  }
+  return null;
+}
+
+function assignmentNotificationKey(mission, member) {
+  return `${profile.musicianId}:${mission.id}:${member.id}:${member.assignedAt || mission.date}`;
+}
+
+function markAssignmentNotified(key) {
+  const notified = new Set(profile.notifiedAssignmentKeys || []);
+  notified.add(key);
+  profile.notifiedAssignmentKeys = [...notified].slice(-40);
+  profile.lastNotificationKey = key;
+  saveProfile();
 }
 
 function nativeNotifications() {
